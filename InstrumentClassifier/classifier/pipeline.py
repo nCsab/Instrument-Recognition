@@ -2,28 +2,25 @@ import numpy as np
 from pathlib import Path
 
 from classifier import config
-from classifier.features.mfcc_features import MFCCFeatureExtractor
-from classifier.models.random_forest import RandomForestStrategy
 from classifier.dataset.loader import NsynthLoader
 from classifier.evaluation.metrics import evaluate_model
 
 
 class Pipeline:
 
-    def __init__(self, data_dir=None, max_per_class=None):
-        self.feature_extractor = MFCCFeatureExtractor()
-        self.classifier = RandomForestStrategy()
+    def __init__(self, feature_extractor, classifier, data_dir=None, max_per_class=None):
+        self.feature_extractor = feature_extractor
+        self.classifier = classifier
         self.loader = NsynthLoader(data_dir=data_dir, max_per_class=max_per_class)
 
     def run(self):
-        print(f"\n{'='*60}")
-        print(f"  Pipeline: MFCC + RandomForest")
-        print(f"{'='*60}")
+        feature_name = type(self.feature_extractor).__name__
+        model_name = self.classifier.get_name()
 
-        print("\n[1/4] Loading dataset...")
+        print(f"\n[1/4] Loading dataset...")
         splits = self.loader.load_and_split()
 
-        print("\n[2/4] Extracting features...")
+        print(f"\n[2/4] Extracting features ({feature_name})...")
         X_train, y_train = self._extract_features_batch(
             splits["train"][0], splits["train"][1], "train"
         )
@@ -37,7 +34,7 @@ class Pipeline:
         print(f"  Feature dimension: {X_train.shape[1]}")
         print(f"  Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}")
 
-        print("\n[3/4] Training classifier...")
+        print(f"\n[3/4] Training {model_name}...")
         self.classifier.train(X_train, y_train)
         print("  Training complete.")
 
@@ -45,7 +42,7 @@ class Pipeline:
         val_acc = np.mean(val_pred == y_val)
         print(f"  Validation accuracy: {val_acc:.4f}")
 
-        print("\n[4/4] Evaluating on test set...")
+        print(f"\n[4/4] Evaluating on test set...")
         y_pred = self.classifier.predict(X_test)
         y_proba = self.classifier.predict_proba(X_test)
 
@@ -53,22 +50,10 @@ class Pipeline:
             y_true=y_test,
             y_pred=y_pred,
             y_proba=y_proba,
-            model_name="MFCC_RandomForest",
+            model_name=f"{feature_name}_{model_name}",
         )
 
         return results
-
-    def predict(self, audio, sr=None):
-        sr = sr or config.SAMPLE_RATE
-        features = self.feature_extractor.extract(audio, sr)
-        features_2d = features.reshape(1, -1)
-
-        pred = self.classifier.predict(features_2d)[0]
-        proba = self.classifier.predict_proba(features_2d)[0]
-        confidence = float(proba[pred])
-        instrument = config.CLASS_NAMES[pred]
-
-        return instrument, confidence
 
     def _extract_features_batch(self, file_paths, labels, split_name):
         import librosa

@@ -11,6 +11,7 @@ from classifier.features.fft_features import FFTFeatureExtractor
 from classifier.features.mel_filterbank import MelFilterbankExtractor
 from classifier.models.random_forest import RandomForestStrategy
 from classifier.models.svm import SVMStrategy
+from classifier.models.mlp import MLPStrategy
 
 
 def main():
@@ -33,14 +34,16 @@ def main():
     print("=" * 60)
 
     extractors = {
-        "MFCC":       MFCCFeatureExtractor(),
-        "FFT":        FFTFeatureExtractor(),
-        "MelBank-40": MelFilterbankExtractor(n_mels=40),
+        "MFCC":        MFCCFeatureExtractor(),
+        "FFT":         FFTFeatureExtractor(),
+        "MelBank-40":  MelFilterbankExtractor(n_mels=40, use_deltas=False),
+        "MelBank-120": MelFilterbankExtractor(n_mels=40, use_deltas=True),
     }
 
     classifiers = {
         "RandomForest": RandomForestStrategy,
         "SVM":          SVMStrategy,
+        "MLP":          MLPStrategy,
     }
 
     results_summary = []
@@ -66,7 +69,7 @@ def main():
             })
 
     print(f"\n{'='*60}")
-    print(f"  ÖSSZEHASONLÍTÁS — 3 Feature × 2 Modell")
+    print(f"  ÖSSZEHASONLÍTÁS — 4 Feature × 3 Modell")
     print(f"{'='*60}")
     print(f"  {'Feature':<12} {'Modell':<15} {'Dim':>5} {'Pontosság':>12}")
     print(f"  {'-'*47}")

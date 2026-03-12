@@ -6,8 +6,9 @@ from classifier import config
 
 class MelFilterbankExtractor:
 
-    def __init__(self, n_mels=config.N_MELS):
+    def __init__(self, n_mels=config.N_MELS, use_deltas=False):
         self.n_mels = n_mels
+        self.use_deltas = use_deltas
         self.fft_size = config.FFT_SIZE
         self.hop_size = config.HOP_SIZE
 
@@ -24,8 +25,10 @@ class MelFilterbankExtractor:
         )
 
         log_mel = librosa.power_to_db(mel_spec, ref=np.max)
-
         mel_mean = np.mean(log_mel, axis=1)
+
+        if not self.use_deltas:
+            return mel_mean.astype(np.float32)
 
         delta = librosa.feature.delta(log_mel)
         delta_mean = np.mean(delta, axis=1)
@@ -36,4 +39,4 @@ class MelFilterbankExtractor:
         return np.concatenate([mel_mean, delta_mean, delta2_mean]).astype(np.float32)
 
     def get_feature_dim(self):
-        return self.n_mels * 3
+        return self.n_mels * 3 if self.use_deltas else self.n_mels

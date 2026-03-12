@@ -61,3 +61,11 @@ Teljes NSynth dataset: **4548 train / 975 val / 975 test** (csak akusztikus, 6 h
 - Alacsony szórás (< 0.01) = robusztus modell
 - MelBank-40+MLP szórása magas (0.020) — kevésbé stabil
 - Az MLP tensorflow.keras implementáció, közvetlenül exportálható `.h5`-ként az STM32Cube.AI számára
+
+## Következő lépések
+
+- [x] SVM modell hozzáadása
+- [x] MLP (Keras) modell hozzáadása
+- [x] Teljes 4×3 benchmark (12 kombináció)
+- [ ] Keras MLP exportálás `.h5` formátumba
+- [ ] Confusion matrix vizualizáció (matplotlib)

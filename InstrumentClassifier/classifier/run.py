@@ -8,7 +8,9 @@ from classifier import config
 from classifier.pipeline import Pipeline
 from classifier.features.mfcc_features import MFCCFeatureExtractor
 from classifier.features.fft_features import FFTFeatureExtractor
+from classifier.features.mel_filterbank import MelFilterbankExtractor
 from classifier.models.random_forest import RandomForestStrategy
+from classifier.models.svm import SVMStrategy
 
 
 def main():
@@ -31,37 +33,45 @@ def main():
     print("=" * 60)
 
     extractors = {
-        "MFCC": MFCCFeatureExtractor(),
-        "FFT":  FFTFeatureExtractor(),
+        "MFCC":       MFCCFeatureExtractor(),
+        "FFT":        FFTFeatureExtractor(),
+        "MelBank-40": MelFilterbankExtractor(n_mels=40),
+    }
+
+    classifiers = {
+        "RandomForest": RandomForestStrategy,
+        "SVM":          SVMStrategy,
     }
 
     results_summary = []
 
-    for name, extractor in extractors.items():
-        print(f"\n{'='*60}")
-        print(f"  Pipeline: {name} + RandomForest")
-        print(f"{'='*60}")
+    for feat_name, extractor in extractors.items():
+        for clf_name, clf_factory in classifiers.items():
+            print(f"\n{'='*60}")
+            print(f"  Pipeline: {feat_name} + {clf_name}")
+            print(f"{'='*60}")
 
-        pipeline = Pipeline(
-            feature_extractor=extractor,
-            classifier=RandomForestStrategy(),
-            max_per_class=args.max_per_class,
-        )
-        results = pipeline.run()
+            pipeline = Pipeline(
+                feature_extractor=extractor,
+                classifier=clf_factory(),
+                max_per_class=args.max_per_class,
+            )
+            results = pipeline.run()
 
-        results_summary.append({
-            "feature": name,
-            "accuracy": results["accuracy"],
-            "dim": extractor.get_feature_dim(),
-        })
+            results_summary.append({
+                "feature": feat_name,
+                "model": clf_name,
+                "accuracy": results["accuracy"],
+                "dim": extractor.get_feature_dim(),
+            })
 
     print(f"\n{'='*60}")
-    print(f"  ÖSSZEHASONLÍTÁS")
+    print(f"  ÖSSZEHASONLÍTÁS — 3 Feature × 2 Modell")
     print(f"{'='*60}")
-    print(f"  {'Feature':<12} {'Dim':>5} {'Pontosság':>12}")
-    print(f"  {'-'*32}")
+    print(f"  {'Feature':<12} {'Modell':<15} {'Dim':>5} {'Pontosság':>12}")
+    print(f"  {'-'*47}")
     for r in sorted(results_summary, key=lambda x: x["accuracy"], reverse=True):
-        print(f"  {r['feature']:<12} {r['dim']:>5} {r['accuracy']:>11.1%}")
+        print(f"  {r['feature']:<12} {r['model']:<15} {r['dim']:>5} {r['accuracy']:>11.1%}")
     print(f"{'='*60}")
 
 

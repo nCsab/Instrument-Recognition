@@ -1,51 +1,63 @@
 # COMPARISON — InstrumentClassifier Benchmark
 
-Teljes NSynth dataset: **4548 train / 975 val / 975 test** minta (csak akusztikus, 6 hangszercsalád)
+Teljes NSynth dataset: **4548 train / 975 val / 975 test** (csak akusztikus, 6 hangszercsalád)
+5 random seed átlaga: [7, 21, 42, 77, 123]
 
-## Összefoglaló
+## Összefoglaló — 4 Feature × 3 Modell
 
-| Feature | Modell | Dim | Pontosság | Val. acc. |
-|:--|:--|:--:|:--:|:--:|
-| **MFCC** | RandomForest | 39 | **99.4%** | 98.4% |
-| **FFT** | RandomForest | 11 | **91.0%** | 91.1% |
+| Kombináció | Dim | Átlag | Szórás | Min | Max |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| **MFCC + MLP** | 39 | **99.5%** | 0.002 | 99.0% | 99.6% |
+| **MFCC + SVM** | 39 | **99.4%** | 0.002 | 99.0% | 99.7% |
+| **MelBank-120 + MLP** | 120 | **99.3%** | 0.004 | 98.9% | 100.0% |
+| MFCC + RandomForest | 39 | 99.2% | 0.002 | 98.9% | 99.5% |
+| MelBank-120 + SVM | 120 | 99.1% | 0.002 | 98.8% | 99.5% |
+| MelBank-120 + RandomForest | 120 | 98.8% | 0.004 | 98.2% | 99.5% |
+| MelBank-40 + RandomForest | 40 | 96.8% | 0.004 | 96.3% | 97.4% |
+| FFT + MLP | 31 | 95.9% | 0.004 | 95.3% | 96.4% |
+| MelBank-40 + MLP | 40 | 95.7% | 0.020 | 92.1% | 97.4% |
+| FFT + RandomForest | 31 | 95.0% | 0.006 | 94.1% | 96.0% |
+| MelBank-40 + SVM | 40 | 89.0% | 0.007 | 88.4% | 90.3% |
+| FFT + SVM | 31 | 88.2% | 0.011 | 86.7% | 90.0% |
 
-## Részletes eredmények
+## Feature típus összehasonlítás (legjobb modellel)
 
-### MFCC + RandomForest — 99.4%
+| Feature | Legjobb modell | Átlag | Szórás | Dim | MCU ciklus |
+|:--|:--|:--:|:--:|:--:|:--:|
+| MFCC | MLP | 99.5% | 0.002 | 39 | ~50K |
+| MelBank-120 | MLP | 99.3% | 0.004 | 120 | ~30K |
+| MelBank-40 | RandomForest | 96.8% | 0.004 | 40 | ~20K |
+| FFT | MLP | 95.9% | 0.004 | 31 | ~15K |
 
-| Hangszer | Precision | Recall | F1-score | Minták |
-|:--|:--:|:--:|:--:|:--:|
-| guitar | 99% | 100% | 100% | 295 |
-| keyboard | 100% | 97% | 98% | 66 |
-| string | 99% | 100% | 99% | 168 |
-| brass | 100% | 100% | 100% | 173 |
-| reed | 99% | 99% | 99% | 144 |
-| mallet | 100% | 100% | 100% | 129 |
+## Seed-enkénti részletek
 
-### FFT + RandomForest — 91.0%
+| Kombináció | Seed 7 | Seed 21 | Seed 42 | Seed 77 | Seed 123 |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| MFCC+MLP | 99.5% | 99.0% | 99.6% | 99.6% | 99.6% |
+| MFCC+SVM | 99.0% | 99.5% | 99.5% | 99.7% | 99.5% |
+| MelBank-120+MLP | 99.0% | 98.9% | 99.5% | 100.0% | 98.9% |
+| MFCC+RandomForest | 98.9% | 99.5% | 99.3% | 99.0% | 99.5% |
+| MelBank-120+SVM | 99.5% | 98.8% | 99.2% | 99.0% | 98.9% |
+| MelBank-120+RandomForest | 98.8% | 99.0% | 98.6% | 98.2% | 99.5% |
+| MelBank-40+RandomForest | 97.4% | 96.4% | 97.0% | 96.3% | 96.9% |
+| FFT+MLP | 95.3% | 95.8% | 96.3% | 96.4% | 95.5% |
+| MelBank-40+MLP | 92.1% | 97.4% | 96.6% | 97.3% | 95.1% |
+| FFT+RandomForest | 94.9% | 94.1% | 96.0% | 94.9% | 95.1% |
+| MelBank-40+SVM | 88.4% | 90.3% | 88.8% | 88.4% | 89.3% |
+| FFT+SVM | 87.4% | 87.8% | 88.8% | 90.0% | 86.7% |
 
-| Hangszer | Precision | Recall | F1-score | Minták |
-|:--|:--:|:--:|:--:|:--:|
-| guitar | 91% | 95% | 93% | 295 |
-| keyboard | 97% | 44% | 60% | 66 |
-| string | 85% | 96% | 91% | 168 |
-| brass | 88% | 97% | 92% | 173 |
-| reed | 96% | 90% | 92% | 144 |
-| mallet | 96% | 94% | 95% | 129 |
+## STM32 ajánlás
 
-## Tanulságok
+| Cél | Kombináció | Pontosság | MCU ciklus |
+|:--|:--|:--:|:--:|
+| **Legjobb MCU kompromisszum** | MelBank-120 + MLP | 99.3% | ~30K |
+| Legjobb pontosság | MFCC + MLP | 99.5% | ~50K |
+| Legolcsóbb | FFT + MLP | 95.9% | ~15K |
 
-1. **MFCC >> FFT** teljes dataseten (99.4% vs 91.0%)
-2. Az FFT **keyboard felismerése nagyon gyenge** (recall: 44%) — a zongorahangot összekeveri más hangszerekkel
-3. Az MFCC 39 dimenziós "ujjlenyomata" sokkal gazdagabb mint az FFT 11 száma
-4. Több adat = sokkal jobb eredmény (30 mintával: 81%/72%, teljes: 99.4%/91.0%)
+## Következtetések
 
-## Még elérhető kombinációk
-
-A projekt jelenleg 2 feature extractort (MFCC, FFT) és 1 modellt (RandomForest) tartalmaz.
-
-Következő lépések:
-- [ ] Mel Filterbank feature extractor hozzáadása
-- [ ] SVM modell hozzáadása
-- [ ] MLP (Keras) modell hozzáadása
-- [ ] Teljes 3×3 benchmark (9 kombináció)
+- **MFCC+MLP** az abszolút legjobb (99.5%), de az MCU-n +20K extra ciklus a DCT-ért
+- **MelBank-120+MLP** a legjobb MCU kompromisszum (99.3%, max 100.0% egy seed-del)
+- Alacsony szórás (< 0.01) = robusztus modell
+- MelBank-40+MLP szórása magas (0.020) — kevésbé stabil
+- Az MLP tensorflow.keras implementáció, közvetlenül exportálható `.h5`-ként az STM32Cube.AI számára

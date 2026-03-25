@@ -4,12 +4,12 @@ import librosa
 import random
 import soundfile as sf
 from utils.feature_utils import extract_log_mel
-from utils.augmentation_utils import add_noise, add_reverb, add_eq, add_pitch_shift
+from utils.augmentation_utils import add_noise, add_reverb, add_eq, add_pitch_shift, apply_macbook_augment
 
 # Útvonalak beállítása
-DATASET_PATH = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset"
+DATASET_PATH = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
 OUTPUT_PATH = "/Volumes/Kingston XS1000 Media/project/processed_data"
-CLASSES = ["guitar", "piano", "other", "noise"]
+CLASSES = ["guitar", "piano", "vocal", "other", "noise"]
 AUG_SAMPLES_PATH = "/Volumes/Kingston XS1000 Media/project/augmented_samples"
 MAX_SAMPLES_TO_SAVE = 10 # Csak ennyit mentünk ki mutatóba egyenként
 
@@ -32,6 +32,10 @@ def process_log_mel():
     data = []
     labels = []
 
+    if not os.path.exists(DATASET_PATH):
+        print(f"HIBA: A dataset mappa nem található: {DATASET_PATH}")
+        return
+
     noise_dir = os.path.join(DATASET_PATH, "noise")
     noise_files = []
     if os.path.exists(noise_dir):
@@ -40,6 +44,7 @@ def process_log_mel():
     for label_idx, class_name in enumerate(CLASSES):
         class_dir = os.path.join(DATASET_PATH, class_name)
         if not os.path.exists(class_dir):
+            print(f"Figyelem: {class_dir} nem található. Kihagyás.")
             continue
             
         print(f"Processing class: {class_name} for Log-Mel...")
@@ -57,38 +62,43 @@ def process_log_mel():
                 segment = y[:SR]
                 
                 # Alap Log-Mel
-                data.append(extract_log_mel(segment))
+                feat = extract_log_mel(segment)
+                data.append(feat)
                 labels.append(label_idx)
                 
-                # Augmentálás (50% eséllyel)
-                if class_name != "noise" and random.random() < 0.5:
+                # MacBook Augmentáció (100% eséllyel, kivéve a zaj kategóriát)
+                if class_name != "noise":
                     aug_y = segment.copy()
-                    choice = random.choice(["noise", "pitch", "reverb", "eq"])
-                    if choice == "noise" and noise_files:
-                        aug_y = add_noise(aug_y, random.choice(noise_files))
-                    elif choice == "pitch":
-                        aug_y = librosa.effects.pitch_shift(aug_y, sr=SR, n_steps=random.uniform(-1.5, 1.5))
-                    elif choice == "reverb":
-                        aug_y = add_reverb(aug_y, sr=SR)
-                    elif choice == "eq":
-                        aug_y = add_eq(aug_y)
+                    aug_y = apply_macbook_augment(aug_y, noise_files, noise_path=noise_dir, sr=SR)
 
                     # --- OPCIONÁLIS: Mentsük le a mintát, hogy belehallgathassunk ---
                     if saved_samples_count < MAX_SAMPLES_TO_SAVE:
-                        aug_filename = f"aug_logmel_{class_name}_{saved_samples_count:02d}_{choice}.wav"
+                        aug_filename = f"aug_logmel_{class_name}_{saved_samples_count:02d}_macbook.wav"
                         sf.write(os.path.join(AUG_SAMPLES_PATH, aug_filename), aug_y, SR)
                         saved_samples_count += 1
                     
                     data.append(extract_log_mel(aug_y))
                     labels.append(label_idx)
-            except: continue
+            except Exception as e:
+                continue
+
+    if not data:
+        print("HIBA: Nem sikerült egyetlen mintát sem feldolgozni! Ellenőrizd az elérési utakat.")
+        return
 
     X = np.array(data)
+    # Ellenőrizzük a dimenziókat a reshape előtt
+    if len(X.shape) < 3:
+        print(f"HIBA: Rossz adat-dimenzió: {X.shape}. Valószínűleg üres a dataset.")
+        return
+
     X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
     X = (X - X.min()) / (X.max() - X.min() + 1e-10)
     
+    label_path = os.path.join(OUTPUT_PATH, "y_log_mel_labels.npy")
     np.save(os.path.join(OUTPUT_PATH, "X_log_mel_full.npy"), X)
-    np.save(os.path.join(OUTPUT_PATH, "y_log_mel_labels.npy"), np.array(labels))
+    np.save(label_path, np.array(labels))
+    print(f"\nCOMPLETED! Saved Log-Mel as {X.shape} -> {OUTPUT_PATH}")
     print(f"\nCOMPLETED! Saved Log-Mel as {X.shape} -> {OUTPUT_PATH}")
 
 if __name__ == "__main__":

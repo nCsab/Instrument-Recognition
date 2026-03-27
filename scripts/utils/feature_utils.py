@@ -1,16 +1,6 @@
 import numpy as np
 import librosa
 
-def z_score_normalize(data):
-    """
-    Z-score normalizálás (CMVN): koefficsiensek szerinti (axis=1) standardizálás.
-    Így minden MFCC-sáv külön átlag/szórás skálát kap.
-    """
-    # data shape: (n_mfcc, T)
-    mean = np.mean(data, axis=1, keepdims=True)
-    std  = np.std(data, axis=1, keepdims=True)
-    return (data - mean) / (std + 1e-10)
-
 def extract_log_mel(audio, sr=16000, n_mels=64, n_fft=1024, hop_length=512):
     mel_spec = librosa.feature.melspectrogram(
         y=audio, sr=sr, n_mels=n_mels, n_fft=n_fft, hop_length=hop_length
@@ -30,3 +20,13 @@ def extract_mfcc(audio, sr=16000, n_mfcc=40, n_fft=1024, hop_length=512):
         y=audio, sr=sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length
     )
     return mfcc
+
+def z_score_normalize(data):
+    """
+    Z-score normalizálás (CMVN): koefficsiensek szerinti (axis=1) standardizálás.
+    Így minden MFCC-sáv külön átlag/szórás skálát kap.
+    """
+    # data shape: (n_mfcc, T)
+    mean = np.mean(data, axis=1, keepdims=True)
+    std  = np.std(data, axis=1, keepdims=True)
+    return (data - mean) / (std + 1e-10)

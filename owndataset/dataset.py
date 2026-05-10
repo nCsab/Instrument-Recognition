@@ -7,8 +7,8 @@ import sys
 
 # --- KONFIGURÁCIÓ ---
 SR = 16000
-OUTPUT_DIR_1S = "reed_1sec" # A végleges 1mp-es szeletek mappája
-OUTPUT_DIR_5S = "reed_5sec" # Az ideiglenes 5mp-es blokkok mappája
+OUTPUT_DIR_1S = "brass/brass_1sec" # A végleges 1mp-es szeletek mappája
+OUTPUT_DIR_5S = "brass/brass_5sec" # Az ideiglenes 5mp-es blokkok mappája
 
 # Mappák létrehozása
 for d in [OUTPUT_DIR_1S, OUTPUT_DIR_5S]:
@@ -52,23 +52,23 @@ def save_block_and_slice(y, sr, start_s, length_s):
 
     block = y[start:end]
     
-    # 1. 5 mp-es blokk mentése sorszámmal (saxophone_block előtaggal)
-    block_idx = get_next_index(OUTPUT_DIR_5S, "saxophone_block")
-    block_name = f"saxophone_block_{block_idx:03d}.wav"
+    # 1. 5 mp-es blokk mentése sorszámmal (horn_block előtaggal)
+    block_idx = get_next_index(OUTPUT_DIR_5S, "horn_block")
+    block_name = f"horn_block_{block_idx:03d}.wav"
     block_path = os.path.join(OUTPUT_DIR_5S, block_name)
     sf.write(block_path, block, sr)
     print(f"Mentett 5mp blokk: {block_path}")
 
-    # 2. 1 mp-es szeletelés sorszámmal (saxophone előtaggal)
+    # 2. 1 mp-es szeletelés sorszámmal (horn előtaggal)
     sec = sr
     num_clips = len(block) // sec
-    next_idx = get_next_index(OUTPUT_DIR_1S, "saxophone")
+    next_idx = get_next_index(OUTPUT_DIR_1S, "horn")
 
     for i in range(num_clips):
         s = i * sec
         e = s + sec
         clip = block[s:e]
-        out_name = f"saxophone_{next_idx:03d}.wav"
+        out_name = f"horn_{next_idx:03d}.wav"
         out_path = os.path.join(OUTPUT_DIR_1S, out_name)
         sf.write(out_path, clip, sr)
         print(f"  -> Szelet mentve: {out_name}")

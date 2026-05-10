@@ -9,7 +9,7 @@ from utils.augmentation_utils import add_noise, add_reverb, add_eq, add_pitch_sh
 # Útvonalak beállítása
 DATASET_PATH = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
 OUTPUT_PATH = "/Volumes/Kingston XS1000 Media/project/processed_data"
-CLASSES = ["guitar", "piano", "vocal", "string", "noise"]
+CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 AUG_SAMPLES_PATH = "/Volumes/Kingston XS1000 Media/project/augmented_samples"
 MAX_SAMPLES_TO_SAVE = 20 # Csak ennyit mentünk ki mutatóba
 

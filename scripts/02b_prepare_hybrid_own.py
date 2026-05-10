@@ -8,15 +8,17 @@ from collections import defaultdict
 # --- KONFIGURÁCIÓ ---
 ROOT_DIR = "/Volumes/Kingston XS1000 Media/project/dataset"
 # Saját gyűjtemények:
-OWN_GUITAR_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/guitar_1sec"
-OWN_PIANO_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/piano_1sec"
-OWN_VOCAL_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/vocal_1sec"
-OWN_STRING_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/string_1sec"
+OWN_GUITAR_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/guitar/guitar_1sec"
+OWN_PIANO_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/piano/piano_1sec"
+OWN_VOCAL_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/vocal/vocal_1sec"
+OWN_STRING_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/string/string_1sec"
+OWN_REED_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/reed/reed_1sec"
+OWN_BRASS_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/brass/brass_1sec"
 
 # Az új dataset mappája:
 OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
 
-CLASSES = ["guitar", "piano", "vocal", "string", "noise"]
+CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 AUDIO_EXTENSIONS = ('.wav', '.flac')
 
@@ -50,6 +52,16 @@ def collect_string_sources():
     print(f"  Saját vonós(string) minták: {len(sources)}")
     return sources
 
+def collect_reed_sources():
+    sources = get_audio_files(OWN_REED_DIR)
+    print(f"  Saját nádas(reed) minták: {len(sources)}")
+    return sources
+
+def collect_brass_sources():
+    sources = get_audio_files(OWN_BRASS_DIR)
+    print(f"  Saját rézfúvós(brass) minták: {len(sources)}")
+    return sources
+
 def collect_noise_sources():
     # ESC-50 (vagy bármelyik zaj készlet)
     sources = get_audio_files(os.path.join(ROOT_DIR, "ESC-50-master/audio"))
@@ -59,14 +71,16 @@ def collect_noise_sources():
     return sources
 
 def prepare_hybrid():
-    print("--- Egyedi Hybrid Dataset készítése (Saját Gitár + Zongora + Vocal + String) ---")
+    print("--- Egyedi Hybrid Dataset készítése (Saját Gitár + Zongora + Vocal + String + Reed) ---")
     
     # Kiszámoljuk a mintaszámot a saját adatok maximuma alapján
     own_counts = {
         "guitar": len(get_audio_files(OWN_GUITAR_DIR)),
         "piano": len(get_audio_files(OWN_PIANO_DIR)),
         "vocal": len(get_audio_files(OWN_VOCAL_DIR)),
-        "string": len(get_audio_files(OWN_STRING_DIR))
+        "string": len(get_audio_files(OWN_STRING_DIR)),
+        "reed": len(get_audio_files(OWN_REED_DIR)),
+        "brass": len(get_audio_files(OWN_BRASS_DIR))
     }
     
     for cls, count in own_counts.items():
@@ -92,6 +106,8 @@ def prepare_hybrid():
         "piano": collect_piano_sources,
         "vocal": collect_vocal_sources,
         "string": collect_string_sources,
+        "reed": collect_reed_sources,
+        "brass": collect_brass_sources,
         "noise": collect_noise_sources
     }
 

@@ -1,4 +1,3 @@
-
 import os
 from collections import Counter
 
@@ -15,6 +14,8 @@ DATASETS = [
 ]
 
 AUDIO_EXTENSIONS = ('.wav', '.flac', '.mp3', '.m4a', '.ogg')
+WRAPPERS = ['sound_files', 'audio', 'IRTestingData-Part2', 'IRTestingData-Part3', 'IRTestingData-Part1']
+
 
 def analyze_dataset(dataset_name):
     dataset_path = os.path.join(ROOT_DIR, dataset_name)
@@ -23,12 +24,9 @@ def analyze_dataset(dataset_name):
         return
 
     audio_counts = Counter()
-    nsynth_counts = {} # nested dict: {instrument: {source: count}}
+    nsynth_counts = {}
     total_audio_files = 0
     total_files = 0
-    
-    # Generic wrapper folders to skip when determining category
-    WRAPPERS = ['sound_files', 'audio', 'IRTestingData-Part2', 'IRTestingData-Part3', 'IRTestingData-Part1']
 
     is_irmas_test = "IRMAS-TestingData-Part" in dataset_name
     is_medley = "Medley-solos-DB" in dataset_name
@@ -36,18 +34,15 @@ def analyze_dataset(dataset_name):
 
     for root, dirs, files in os.walk(dataset_path):
         total_files += len(files)
-        
+
         audio_files = [f for f in files if f.lower().endswith(AUDIO_EXTENSIONS)]
         if not audio_files:
             continue
-            
+
         total_audio_files += len(audio_files)
 
         if is_irmas_test:
-            # IRMAS Testing Data: labels are inside .txt files
             txt_files = [f for f in files if f.lower().endswith('.txt') and f.lower() not in ["readme.txt", "dataset_summary.txt"]]
-            
-            # Use txt files to count labels
             for tf in txt_files:
                 try:
                     with open(os.path.join(root, tf), 'r') as f:
@@ -59,7 +54,6 @@ def analyze_dataset(dataset_name):
             continue
 
         if is_nsynth:
-            # NSynth: filenames are instrument_source_...wav
             for af in audio_files:
                 parts = af.split('_')
                 if len(parts) >= 2:
@@ -71,9 +65,8 @@ def analyze_dataset(dataset_name):
                 else:
                     audio_counts["unknown"] += 1
             continue
-            
-        if is_medley and root == dataset_path: # Only run CSV parsing once
-            # Medley-solos-DB: labels are in a CSV file
+
+        if is_medley and root == dataset_path:
             csv_file = os.path.join(dataset_path, "Medley-solos-DB_metadata.csv")
             if os.path.exists(csv_file):
                 import csv
@@ -91,17 +84,13 @@ def analyze_dataset(dataset_name):
 
         rel_path = os.path.relpath(root, dataset_path)
         parts = rel_path.split(os.sep)
-        
+
         if rel_path == ".":
             category = "root"
         else:
-            # Skip common wrapper folders to find the real category
             category_parts = [p for p in parts if p not in WRAPPERS]
-            if not category_parts:
-                category = parts[-1]
-            else:
-                category = category_parts[0]
-            
+            category = category_parts[0] if category_parts else parts[-1]
+
         audio_counts[category] += len(audio_files)
 
     summary_file = os.path.join(dataset_path, "dataset_summary.md")
@@ -110,16 +99,16 @@ def analyze_dataset(dataset_name):
         f.write(f"- **Total Files (All types):** {total_files}\n")
         f.write(f"- **Total Audio Files:** {total_audio_files}\n\n")
         f.write("## Category Breakdown\n\n")
-        
+
         if is_irmas_test:
             f.write("> [!NOTE]\n")
-            f.write("> For IRMAS Testing Data, categories are extracted from the `.txt` annotation files. One audio file may have multiple labels.\n\n")
+            f.write("> For IRMAS Testing Data, categories are extracted from `.txt` annotation files.\n\n")
         elif is_medley:
             f.write("> [!NOTE]\n")
             f.write("> For Medley-solos-DB, categories are extracted from `Medley-solos-DB_metadata.csv`.\n\n")
         elif is_nsynth:
             f.write("> [!NOTE]\n")
-            f.write("> For NSynth, categories and sources (acoustic/electric/synthetic) are extracted from filenames.\n\n")
+            f.write("> For NSynth, categories and sources are extracted from filenames.\n\n")
 
         if is_nsynth:
             for instrument in sorted(nsynth_counts.keys()):
@@ -134,8 +123,9 @@ def analyze_dataset(dataset_name):
             f.write("| :--- | :--- |\n")
             for cat, count in sorted(audio_counts.items()):
                 f.write(f"| {cat} | {count} |\n")
-    
-    print(f"Generated Markdown summary for {dataset_name}")
+
+    print(f"Generated summary for {dataset_name}")
+
 
 if __name__ == "__main__":
     for ds in DATASETS:

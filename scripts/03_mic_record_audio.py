@@ -16,29 +16,19 @@ print("Interactive microphone recorder")
 print("-" * 40)
 
 for cat in CATEGORIES:
-    input_wav = os.path.join(TO_RECORD_DIR, f"{cat}_for_mic.wav")
-    if not os.path.exists(input_wav):
-        print(f"Skipped: {input_wav} not found.")
-        continue
-
-    info = sf.info(input_wav)
-    duration = info.duration + 5
-
-    print(f"\nCategory: {cat.upper()}")
-    print(f"Prepare '{cat}_for_mic.wav' on your phone.")
-    print(f"Recording duration: {int(duration)} seconds.")
-    input("Press ENTER to start recording...")
-
-    print("Recording started. Start playback on your phone now.")
-
+    input(f"\nPress Enter to start recording: {cat.upper()}")
+    
+    print(f"Recording {cat}...")
     try:
+        duration = 300
         recording = sd.rec(int(duration * SR), samplerate=SR, channels=1)
-
-        for i in range(int(duration), 0, -1):
-            print(f"\rRemaining: {i:3d}s  ", end="")
-            time.sleep(1)
-
-        sd.wait()
+        
+        print("Recording... Press Ctrl+C to stop early and save.")
+        try:
+            sd.wait()
+        except KeyboardInterrupt:
+            sd.stop()
+            print("\nRecording stopped.")
 
         out_path = os.path.join(OUTPUT_DIR, f"{cat}_recorded.wav")
         sf.write(out_path, recording, SR)
@@ -48,4 +38,3 @@ for cat in CATEGORIES:
         print(f"\nError during recording: {e}")
 
 print("\nAll categories recorded.")
-print("Next step: run 04_mic_slice_audio.py")

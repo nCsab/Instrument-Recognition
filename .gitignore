@@ -1,0 +1,53 @@
+# Datasets and generated data
+dataset/
+hybrid_dataset/
+hybrid_dataset_own_final/
+augmented_samples/
+owndataset/
+processed_data/
+augmented_samples/
+
+# Audio and binary files
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.npy
+*.pdf
+*.doc
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# LaTeX build artifacts
+thesis/main.pdf
+thesis/*.aux
+thesis/*.log
+thesis/*.toc
+thesis/*.lof
+thesis/*.out
+thesis/*.bcf
+thesis/*.blg
+thesis/*.bbl
+thesis/*.run.xml
+thesis/missfont.log
+
+# VS Code workspace settings
+.vscode/
+*.code-workspace
+
+# Trained model files
+models/*.keras
+models/*.h5
+
+# Python cache
+__pycache__/
+*.pyc
+scripts/utils/__pycache__/

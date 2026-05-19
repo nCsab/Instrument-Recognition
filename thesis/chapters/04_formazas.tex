@@ -1,0 +1,317 @@
+\chapter{Formázási tudnivalók}
+
+Ez a fejezet összeszedi azokat a nélkülözhetetlen elemeket, amelyeket a dolgozat
+\LaTeX-ben való elkészítése során használnod kell. Feltétlenül olvasd egyszer
+végig, hátha akad köztük újdonság.
+
+\section{Általános tudnivalók}
+
+A diplomaterv szabványos méretű A4-es lapokra kerüljön. Az alapértelmezett
+betűkészlet a 12 pontos Times New Roman, 1.15-ös sorközzel. Ez a sablon
+(\texttt{sapientia-thesis.cls}) a fenti előírásoknak megfelelően van
+kialakítva, így általában külön nem kell foglalkoznod velük.
+
+Minden oldalon -- az első négy szerkezeti elem kivételével -- szerepelnie kell
+az oldalszámnak.
+
+A fejezeteket decimális beosztással kell ellátni. Az ábrákat a megfelelő helyre
+be kell illeszteni, fejezetenként decimális számmal és kifejező címmel kell
+ellátni -- ezt a \LaTeX\ automatikusan kezeli a \verb|\caption| és
+\verb|\label| parancsok segítségével.
+
+Az irodalomjegyzék szövegközi hivatkozása sorszámozva történik (\texttt{[1]},
+\texttt{[2]} stb.). A teljes lista a hivatkozási sorrendben a szöveg végén
+szerepel. A szakirodalmi források címeit mindig az eredeti nyelven kell
+megadni. A listában szereplő valamennyi publikációra hivatkozni kell a
+szövegben.
+
+\section{Stílusok}
+
+A \LaTeX\ szövegek egységességét környezetek (\textit{environments}) és
+parancsok (\textit{commands}) segítségével lehet a legegyszerűbben garantálni.
+A sablon előre definiált parancsokat tartalmaz a leggyakoribb esetekre
+(fejezetek, ábrák, kódblokkok, hivatkozások). Azt javaslom, hogy a sablon
+struktúráját kövesd, és ne definiálj saját formázó parancsokat -- ha valami
+hiányzik, szólj a konzulensednek.
+
+\section{Címsorok}
+
+A fejezetcímek esetén a \verb|\chapter|, \verb|\section|, \verb|\subsection|
+és \verb|\subsubsection| parancsokat használjuk. Negyedik szintnél mélyebbre
+egy ilyen terjedelmű munkában ritkán van szükség; ha ez mégis felmerülne,
+sokszor inkább a fejezetszerkezetet érdemes átgondolni újból.
+
+Kerüljük azt, amikor egy fejezetcím után rögtön alfejezet következik -- legalább
+pár sor bevezető szöveg legyen közöttük. Hasonlóan érdemes elkerülni azt is,
+amikor a címsor után rögtön felsorolás következik.
+
+\section{Másolás, beillesztés}
+
+A copy-paste a szép formázás legnagyobb gyilkosa. Amennyiben külső forrásból
+(weboldal, PDF, más szerkesztő) illeszted be a szöveget egy \texttt{.tex}
+fájlba, figyelj arra, hogy az idézőjelek (\verb|„|~és~\verb|"|), kötőjelek
+(\verb|--|, \verb|---|) és az ékezetes karakterek helyesen kerüljenek át.
+\LaTeX-ben a speciális karaktereket (\verb|%|, \verb|&|, \verb|$|, \verb|#|
+stb.) visszaperrel kell escape-elni: \verb|\%|, \verb|\&|, \verb|\$| stb.
+
+Szöveg áthelyezésekor a kereszthivatkozások (\verb|\ref|, \verb|\cite|)
+automatikusan érvényesek maradnak -- ez a \LaTeX\ egyik nagy előnye a
+szövegszerkesztőkkel szemben.
+
+\section{Fordítás és frissítés}
+\label{sec:forditas}
+
+A \LaTeX-ben a tartalomjegyzék, ábrajegyzék, kereszthivatkozások és
+irodalomjegyzék automatikusan frissülnek fordításkor -- nincs szükség kézi
+mezőfrissítésre. Hivatkozások változásakor azonban a teljes fordítási
+sorozatot le kell futtatni:
+
+\begin{enumerate}[noitemsep]
+  \item \texttt{pdflatex main} -- első átmenet, aux-fájlok generálása
+  \item \texttt{biber main} -- irodalomjegyzék feldolgozása
+  \item \texttt{pdflatex main} -- hivatkozások beírása
+  \item \texttt{pdflatex main} -- tartalomjegyzék véglegesítése
+\end{enumerate}
+
+A legtöbb \LaTeX-szerkesztő (TeXstudio, VS~Code + LaTeX Workshop, Overleaf)
+ezt a sorozatot egyetlen gombnyomásra elvégzi. Ha csak a szöveg változott és
+nincs új hivatkozás, elegendő egyszer fordítani.
+
+\section{Helyesírás}
+
+A rossz helyesírásra nincs mentség. E fejezetben összeszedem a leggyakrabban
+látott hibákat, amiknek elkerülésére érdemes odafigyelni. Ettől függetlenül
+melegen ajánlom, hogy a kész dolgozatod olvastasd át egy
+barátoddal/családtagoddal, hogy az apróbb, megbúvó hibákat is kiszűrd.
+
+\subsection{Elgépelések}
+
+Ez mindenkivel megesik. A TeXstudio és a VS~Code~+~LaTeX~Workshop bővítmény
+beépített helyesírás-ellenőrzővel rendelkezik; győzödj meg arról, hogy a
+\textbf{magyar szótár} telepítve és beállítva van. Overleaf-en a
+\textit{Spell check} menüben válaszd a \textit{Hungarian} nyelvet.
+
+\subsection{Egyeztetés hiánya}
+
+Az elírások egyik leggyakoribb formája az egyes szám/többes szám
+egyeztetésének hiánya mondatrészek között, mint például: „Petike és a
+barátnője elmentek a boltba és hozott egy kiló kenyeret." Ezek a mondatok
+főleg az utólagos átfogalmazások, belejavítások során keletkeznek; legjobb
+védelem ellenük az utólagos átolvasás.
+
+\subsection{Külföldi szavak, kifejezések}
+
+Az idegen szavakkal csak a baj van. Az általános jó tanácsom, hogy amennyiben
+csak lehetséges, \textbf{magyar, vagy magyarosított írásmódú szakkifejezéseket
+használj}, és a könnyebb olvashatóság érdekében mindig kerüld az idegen szavak
+ragozását. Pl. „Apache-csal" helyett írjuk azt, hogy „Apache webszerverrel".
+
+Néhány gyorstipp szoftverfejlesztőknek: property $\to$ tulajdonság; event $\to$
+esemény; method $\to$ metódus/függvény; debug $\to$ hibakeresés; file $\to$
+fájl.
+
+\subsection{Helyesírás-ellenőrző}
+
+Személyes ízlés kérdése, hogy milyen szerkesztővel dolgozol, ugyanakkor azt
+\textbf{meg kell oldanod, hogy legyen meg mellé magyar nyelvű
+helyesírás-ellenőrződ}. E nélkül dokumentumot szerkeszteni olyan, mint
+papíron programozni.
+
+TeXstudio esetén: \textit{Options / Configure TeXstudio / Editor / Spelling
+dictionary} alatt telepítse a \texttt{hu\_HU} szótárat. Tesztelésképpen írd
+be, hogy \textit{„elgemépelés"} -- ha nem húzza alá pirossal, valami nincs
+rendben a beállításaiddal.
+
+\section{Képek}
+
+A dolgozatodban valószínűleg számos ábrára lesz szükséged.
+
+\subsection{Beszúrás, formázás}
+
+A képhez használd a \texttt{figure} környezetet, a képaláírást a
+\verb|\caption| paranccsal add meg, és adj neki egy \verb|\label|-t a
+hivatkozáshoz. A sablonban az \texttt{[H]} elhelyezési opció (a \texttt{float}
+csomag) rögzíti az ábrát a szöveghez képest, ami diplomadolgozatnál általában
+a legjobb választás.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\rule{0pt}{4cm}\rule{0.65\textwidth}{0pt}}
+  \caption{Példa képaláírásra}
+  \label{fig:pelda}
+\end{figure}
+
+Az ábra sorszáma mellé mindig érdemes rövid magyarázatot is fűzni. Erre
+láthatunk példát a~\ref{fig:pelda}. ábrán. Vektorgrafikus ábrákat PDF vagy
+EPS formátumban illeszd be (\verb|\includegraphics{abra.pdf}|); ezek
+nyomtatásban is élesen jelennek meg.
+
+Tapasztalni fogod, hogy a \texttt{figure} és \texttt{table} lebegő elemek
+néha nem a kívánt helyre kerülnek. Az ábrák méretének módosításával, vagy a
+\verb|[H]| opció alkalmazásával tudod megoldani, hogy ne maradjanak nagy üres
+felületek a dolgozatodban.
+
+\subsection{Képminőség}
+
+A raszteres (tehát nem vektorgrafikus) képek használata különös
+körültekintést igényel. Ezek kiválóan néznek ki a 90 dpi-s monitorodon, ám a
+600/1200~dpi-s nyomtatókon kinyomtatva rendkívül bénák lesznek a szép,
+pixelmentes szövegek és vektorgrafikus ábrák mellett.
+
+Ha tehát lehetséges, használjunk vektorgrafikus ábrákat (PDF, EPS, SVG), vagyis
+a diagramokat, forráskódot stb. ne képernyőképeken keresztül, hanem közvetlen
+\verb|\includegraphics| megoldással illesszük be. Ha elkerülhetetlen a
+raszteres képek használata, próbáljunk meg minél magasabb felbontású képet
+berakni.
+
+\section{Kereszthivatkozások}
+
+Amennyiben szeretnél egy ábrára, táblázatra, képletre vagy korábbi fejezetre
+hivatkozni, helyezz el egy \verb|\label{azonosito}| parancsot a hivatkozott
+elemnél, majd a szövegben hivatkozz rá a \verb|\ref{azonosito}| paranccsal.
+Például: lásd a~\ref{fig:pelda}. ábrát, vagy lásd a~\ref{sec:forditas}.
+fejezetet.
+
+Kerüld az „előző oldalon", „következő oldalon" fordulatokat, ugyanis az ábrák
+végső helyzete a tördelés során még megváltozhat.
+
+\section{Irodalomhivatkozások}
+\label{sec:irodalom}
+
+Az irodalomhivatkozások kezelésére a \texttt{biblatex} csomagot és a
+\texttt{biber} háttérprogramot használjuk. A forrásokat a
+\texttt{references.bib} fájlban kell felvenni BibTeX formátumban. Amikor
+dolgozatodban egy külső műre, weboldalra, könyvre, előadásra stb.\ szeretnél
+hivatkozni, add hozzá a \texttt{.bib} fájlhoz, majd a szövegben hivatkozz rá a
+\verb|\cite{kulcs}| paranccsal~\cite{Abb00, Del03}.
+
+Folyóirat cikkeknél a szerzők mellett szerepeljen a pontos cím, a folyóirat
+neve, évfolyam, szám és oldalszám. Internet hivatkozásoknál fontos, hogy az
+oldal szerzőjét, címét és az elérés időpontját is add meg (mivel a link egy
+idő után elérhetetlenné is válhat) -- a BibTeX \texttt{@online} típusával és
+az \texttt{urldate} mezővel.
+
+A sablon \texttt{numeric} stílusú hivatkozásokat használ: a szövegben a
+forrásra \texttt{[1]}, \texttt{[2]} alakban hivatkozunk, a lista a szöveg
+végén, hivatkozási sorrendben jelenik meg.
+
+\subsection{Pozícionálás}
+
+Az irodalomhivatkozások a szövegtörzsben, ábrák képaláírásaiban és
+táblázatokban is előfordulhatnak, de \textbf{fejezetcímekben soha}. Ha egy
+adott forrás egy egész bekezdésre vonatkozik, akkor is elég, ha az első mondat
+vagy bekezdés után megemlítjük.
+
+\subsection{Mikor kell hivatkoznom?}
+
+Minden külső forrásból átvett képnél, szövegrésznél, illetve olyan
+állítások, technológiák, algoritmusok megemlítésénél, melyek nem feltétlenül
+egyértelműek egy átlagos műveltségű olvasó számára~\cite{Hop95}.
+Nagyságrendileg egy szakdolgozatban átlagosan 10--20, egy diplomatervben
+átlagosan 20--30 külső forrást illik megemlíteni. Ha lehet, törekedjél
+nyomtatott forrásokra (folyóiratcikkek, könyvek, konferencia-kiadványok), és
+csak akkor hivatkozz weboldalakra, ha nyomtatott forrást nem találtál.
+
+\section{\LaTeX\ tippek és trükkök}
+
+\subsection{Navigáció a dokumentumban}
+
+Mivel a fejezeteket nagy valószínűséggel nem sorrendben fogod tartalommal
+feltölteni, érdemes kihasználni a szerkesztő navigációs lehetőségeit. A
+TeXstudio bal oldali paneljén a \textit{Structure} nézet mutatja az összes
+fejezetet és alfejezetet, egy kattintással az adott helyre ugrik. A
+\texttt{hyperref} csomag (a sablonban már betöltve) a generált PDF-be kattintható
+könyvjelzőket és belső linkeket szúr be, amelyek PDF-megjelenítőkben
+navigációs panelként jelennek meg.
+
+\subsection{Megjegyzések a forráskódban}
+
+A \LaTeX-ban a megjegyzéseket a \verb|%| karakterrel lehet beilleszteni -- a
+sor többi részét a fordító figyelmen kívül hagyja. Ezt előszeretettel
+használhatod, hogy megjelöld azokat a részeket, ahova még vissza kell térned.
+Konzulensed a \texttt{changes} csomag segítségével tud nyomtatható
+megjegyzéseket és nyomonkövethető javításokat fűzni a dokumentumhoz.
+
+\subsection{Korrektúra és együttműködés}
+
+Konzulensed legegyszerűbben a \texttt{changes} csomag
+(\verb|\added{...}|, \verb|\deleted{...}|, \verb|\replaced{...}{...}|)
+segítségével tud megjegyzéseket és javításokat fűzni a dokumentumhoz, amelyek
+a PDF-ben jól látható módon jelennek meg. Overleaf esetén a beépített Track
+Changes funkciót is használhatjátok.
+
+\subsection{Hasznos gyorsbillentyűk -- TeXstudio}
+
+A TeXstudio számos beépített gyorsbillentyűt kínál. A legfontosabbak:
+\texttt{F5} -- fordítás és megjelenítés; \texttt{F6} -- csak fordítás;
+\texttt{Ctrl+Shift+B} -- \texttt{biber} futtatása; \texttt{Ctrl+Klikk} -- ugrás
+a forrásból a PDF-be (és vissza). Tetszőleges parancshoz saját
+gyorsbillentyű rendelhető az \textit{Options / Configure TeXstudio / Shortcuts}
+menüben.
+
+\section{Kódrészletek}
+
+Érdekesebb és bonyolultabb programozási megoldásainkat bátran illusztrálhatjuk
+kódrészletek beszúrásával. Fontos, hogy a beillesztett kódrészlet mérete álljon
+arányban annak fontosságával -- ritkán érdemes egy bekezdésnyi kódnál többet
+beszúrni egyszerre. Amennyiben egy bonyolultabb, akár több oldalas algoritmust
+szeretnénk bemutatni, annak kódját érdemesebb függelékbe rakni.
+
+\subsection{Formázás}
+
+A kódrészletek beillesztésére a \texttt{listings} csomagot használjuk
+(\texttt{lstlisting} környezet). A sablonban a csomag alapértelmezetten
+kulcsszókiemelést és monospace betűtípust alkalmaz. Kódrészletek
+beillesztésére semmiképpen ne képeket használjunk.
+
+A kódrészletek formázásánál kerüljük a helypazarlást, illetve próbáljunk
+megelőzni az olvashatóságot rontó sortördelést, akár a forráskód módosításának
+árán is. Másolás előtt érdemes a behúzások mértékét 4-ről 2 karakterre
+csökkenteni (Visual Studio-ban: \textit{Tools / Options / Text Editor / C\# /
+Tabs}: Tab size = 2, Indent size = 2).
+
+Az alábbi C\# kódrészlet szemlélteti a \texttt{lstlisting} környezet
+használatát:
+
+\begin{lstlisting}[language={[Sharp]C}]
+static void Main(string[] args)
+{
+  var ci = new CultureInfo("en-us");
+  ci.NumberFormat.CurrencySymbol = "";
+  Thread.CurrentThread.CurrentCulture = ci;
+  Console.WriteLine(ci);
+  Console.WriteLine("{0:c}", 5.66);
+}
+\end{lstlisting}
+
+A programozási elemek (osztálynevek, függvények) szövegközi kiemelésére
+használd a \verb|\texttt{NévMinták}| parancsot; ez egységes, monospace
+megjelenést biztosít.
+
+\subsection{Irodalomjegyzék}
+
+Az irodalomjegyzékben szereplő hivatkozásokat a \texttt{biblatex} csomag kezeli.
+A \verb|\printbibliography| parancs automatikusan generálja a listát a
+\texttt{references.bib} fájl tartalma alapján. A fordítási sorozatban a
+\texttt{biber} futtatása frissíti az irodalomjegyzéket (lásd a~\ref{sec:forditas}.
+fejezetet). Csak azok a tételek jelennek meg a listában, amelyekre a szövegben
+\verb|\cite|-tal hivatkoztál -- a \verb|\nocite{*}| paranccsal az összes tétel
+megjeleníthető.
+
+\section{Utolsó simítások}
+
+Miután elkészültünk a dokumentációval, ne felejtsük el a következő lépéseket:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Teljes fordítási sorozat:} \texttt{pdflatex} $\to$
+        \texttt{biber} $\to$ \texttt{pdflatex} $\to$ \texttt{pdflatex}.
+        Ellenőrizd, hogy nem jelent-e meg valahol az „undefined reference"
+        vagy „Citation ... undefined" figyelmeztetés a logban.
+  \item \textbf{PDF metaadatok:} A \verb|\hypersetup| paranccsal a
+        \texttt{pdfauthor}, \texttt{pdftitle} és \texttt{pdfkeywords} mezők
+        kitölthetők -- ezek a PDF-fájl tulajdonságaiban jelennek meg.
+  \item \textbf{Kinézet ellenőrzése PDF-ben:} A legjobb teszt a végén, ha a
+        kész PDF-et átolvasod, különös tekintettel az oldalelrendezésre, az
+        ábrák pozíciójára, a tartalomjegyzék oldalszámaira és az
+        irodalomjegyzékre.
+\end{itemize}

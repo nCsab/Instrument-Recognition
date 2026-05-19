@@ -1,0 +1,25 @@
+\abstractpagehu{Kivonat}{%
+  Jelen diplomadolgozat az automatikus hangszerfelismerés problémáját vizsgálja
+  zenei felvételek alapján, modern gépi tanulási módszerek alkalmazásával.
+  A kidolgozott rendszer valós időben képes osztályozni hét hangszerkategóriát
+  (gitár, zongora, ének, vonós, nádas fúvós, rézfúvós és környezeti zaj)
+  monofón audiojel alapján.
+
+  A megvalósított megoldás három spektrális jellemző típust (Log-Mel
+  spektrogram, STFT és MFCC) használ, amelyek kétdimenziós konvolúciós neurális
+  hálózatba (2D~CNN) kerülnek betáplálásra. A modell tanítása Google Colab
+  környezetben történt. Az adathalmazt saját tiszta internetes minták és
+  mikrofonnal/telefonnal újrafelvételezett minták, valamint az ESC-50
+  környezeti zajadatbázis egyesítésével hoztam létre. Az adataugmentációs modul
+  a valós felvételi körülményeket szimulálja visszhang, környezeti zaj és
+  mikrofonkarakterisztika hozzáadásával.
+
+  A kísérleti eredmények versenyképes osztályozási pontosságot mutatnak a
+  tesztadatokon, és a rendszert valós idejű mikrofonos felismeréssel is
+  validáltam. A dolgozat hozzájárul annak demonstrálásához, hogy elérhető
+  számítási erőforrásokkal is megvalósítható egy robusztus hangszerosztályozó
+  rendszer.
+}{%
+\textit{\textbf{Kulcsszavak:}} hangszerfelismerés, konvolúciós neurális hálózat, Mel-spektrogram, STFT, MFCC, audioosztályozás, hullámforma, spektrális kép%
+}
+

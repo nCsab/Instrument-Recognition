@@ -1,0 +1,141 @@
+\documentclass{sapientia-thesis}
+
+% ── Bibliography file ────────────────────────────────────────────────────────
+\thesisbibfile{references.bib}
+
+% ── Student-specific metadata ────────────────────────────────────────────────
+\titleRO{Recunoașterea automată a instrumentelor muzicale pe baza înregistrărilor audio}
+\titleHU{Automatikus hangszerfelismerés zenefelvételek alapján}
+\titleEN{Automatic Musical Instrument Recognition Based on Audio Recordings}
+\studentname{Nagy Csaba}
+\yearofthesis{2026}
+
+\programro{SPECIALIZAREA CALCULATOARE}
+\programhu{SZÁMÍTÁSTECHNIKA SZAK}
+\programen{COMPUTER SCIENCE}
+
+\supervisorRO{%
+  \textbf{Conf.\ univ.\ dr.\ Iclănzan David Andrei}%
+}
+
+\supervisorHU{%
+  \textbf{Dr.\ Iclănzan David Andrei, egyetemi docens}%
+}
+
+\supervisorEN{%
+  \textbf{Assoc.\ Prof.\ Dr.\ Iclănzan David Andrei}%
+}\usepackage{indentfirst}
+\usepackage{amssymb}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\usetikzlibrary{positioning}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{newunicodechar}
+\usepackage{float}
+\newunicodechar{█}{\rule{0.5em}{1.4ex}}
+\newunicodechar{░}{{\color{lightgray}\rule{0.5em}{1.4ex}}}
+\lstset{
+  basicstyle=\ttfamily\small,
+  literate={█}{{\rule{0.5em}{1.4ex}}}1 {░}{{\color{lightgray}\rule{0.5em}{1.4ex}}}1,
+  keepspaces=true,
+  breaklines=true
+}
+
+\makeatletter
+\@addtoreset{figure}{section}
+\@addtoreset{table}{section}
+\makeatother
+\renewcommand{\thefigure}{\thesection.\arabic{figure}}
+\renewcommand{\thetable}{\thesection.\arabic{table}}
+
+
+\begin{document}
+
+% ════════════════════════════════════════════════════════════════════════════
+% FRONT MATTER  (page order from the github version)
+% ════════════════════════════════════════════════════════════════════════════
+\pagenumbering{gobble}
+
+% ── Page 1: Romanian cover page (LaTeX-generated) ────────────────────────────
+\maketitlepagero
+
+% ── Page 2: Assignment sheet (lucrare de diplomă / feladatkiírás) ─────────────
+\includepdf[pages={2}]{Nagy_Csaba.pdf}
+
+% ── Page 3: Declaration (declarație / nyilatkozat) ───────────────────────────
+\includepdf[pages={3}]{Nagy_Csaba.pdf}
+
+% ── Page 4: Romanian abstract / Extras ───────────────────────────────────────
+\pagenumbering{roman}
+\input{chapters/abstract_ro}
+
+% ── Page 5: Hungarian cover page (LaTeX-generated) ───────────────────────────
+\pagenumbering{gobble}
+\maketitlepagehu
+
+% ── Page 6: Hungarian abstract / Kivonat ─────────────────────────────────────
+\pagenumbering{roman}
+\input{chapters/abstract_hu}
+
+% ── Page 7: English abstract / Abstract ──────────────────────────────────────
+\input{chapters/abstract_en}
+
+% ── Preface / Előszó ─────────────────────────────────────────────────────────
+\input{chapters/eloszo}
+
+% ════════════════════════════════════════════════════════════════════════════
+% TABLES OF CONTENTS  (page 8+)
+% ════════════════════════════════════════════════════════════════════════════
+\cleardoublepage
+\selectlanguage{hungarian}
+
+\phantomsection
+\addcontentsline{toc}{chapter}{\contentsname}
+\tableofcontents
+\clearpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{\listfigurename}
+\listoffigures
+\clearpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{\listtablename}
+\listoftables
+\clearpage
+
+% ════════════════════════════════════════════════════════════════════════════
+% CHAPTER IMPORT
+% ════════════════════════════════════════════════════════════════════════════
+\cleardoublepage
+\pagenumbering{arabic} % Sets numbering to 1, 2, 3... starting from here
+\input{chaphead}
+
+\input{chapters/01_bevezeto}
+
+\input{chapters/02_elmelet}
+
+\input{chapters/03_specifikacio}
+
+\input{chapters/05_tervezes}
+
+\input{chapters/06_uzembehelyezes}
+
+\input{chapters/07_felhasznalas}
+
+\input{chapters/08_kovetkeztetesek}
+
+% ════════════════════════════════════════════════════════════════════════════
+% BIBLIOGRAPHY
+% ════════════════════════════════════════════════════════════════════════════
+\nocite{*}
+\printbibliography[title={Irodalomjegyzék}, heading=bibintoc]
+
+% ════════════════════════════════════════════════════════════════════════════
+% APPENDICES
+% ════════════════════════════════════════════════════════════════════════════
+\input{chapters/99_fuggelek}
+
+\end{document}

@@ -1,0 +1,24 @@
+\abstractpageen{Abstract}{%
+  This thesis addresses the problem of automatic musical instrument recognition
+  from audio recordings using modern machine learning methods. The developed
+  system is capable of classifying seven instrument categories in real time
+  (guitar, piano, vocals, strings, reeds, brass, and ambient noise)
+  from monophonic audio signals.
+
+  The proposed approach relies on the extraction of three types of spectral
+  features (Log-Mel spectrograms, STFT, and MFCC), which are fed into
+  two-dimensional convolutional neural networks (2D~CNN) trained in the
+  Google Colab environment. A hybrid dataset was assembled by combining clean
+  internet-sourced samples, self-recorded microphone playback samples, and
+  ambient noise from the ESC-50 database. A data augmentation module simulates real-world recording conditions by
+  adding reverberation, ambient noise, and microphone characteristics.
+
+  Experimental results demonstrate competitive classification accuracy on the
+  test set, and the system has been validated through real-time recognition of
+  sounds captured by a laptop microphone. This work contributes to demonstrating
+  the feasibility of building a robust musical instrument classifier using
+  accessible computational resources.
+}{%
+\textit{\textbf{Keywords:}} musical instrument recognition, convolutional neural
+network, Mel-spectrogram, STFT, MFCC, audio classification, waveform, spectral image%
+}

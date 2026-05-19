@@ -1,0 +1,26 @@
+\abstractpagero{Extras}{%
+  Prezenta lucrare de diplomă abordează problema recunoașterii automate a
+  instrumentelor muzicale pe baza înregistrărilor audio, utilizând metode
+  moderne de învățare automată. Sistemul dezvoltat este capabil să clasifice
+  în timp real șapte categorii de instrumente (chitară, pian, voce,
+  instrumente cu coarde, instrumente cu ancie, instrumente de alamă și
+  zgomot ambiental) pornind de la semnale audio monofonice.
+
+  Abordarea propusă se bazează pe extragerea a trei tipuri de caracteristici
+  spectrale (Log-Mel spectrograme, STFT și MFCC) și pe antrenarea unor rețele
+  neuronale convoluționale bidimensionale (2D~CNN) în mediul Google Colab.
+  Setul de date hibrid a fost creat prin combinarea unor eșantioane curate
+  descărcate de pe internet, a unor re-înregistrări proprii prin microfon și
+  a zgomotului ambiental din baza de date ESC-50, iar un modul de augmentare
+  a datelor simulează condițiile reale de captare prin adăugarea de reverberație,
+  zgomot ambiental și distorsiuni de microfon.
+
+  Rezultatele experimentale arată o acuratețe competitivă a modelului pe
+  datele de test, iar sistemul a fost validat prin recunoașterea în timp real
+  a sunetelor captate cu microfonul laptopului. Lucrarea contribuie la
+  demonstrarea fezabilității unui clasificator robust de instrumente muzicale,
+  antrenat cu resurse computaționale accesibile.
+}{%
+\textit{\textbf{Cuvinte cheie:}} recunoașterea instrumentelor muzicale, rețele
+neuronale convoluționale, Mel-spectrogramă, STFT, MFCC, clasificare audio, formă de undă, imagine spectrală%
+}

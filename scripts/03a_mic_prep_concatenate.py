@@ -14,34 +14,28 @@ def create_beep(duration_s, freq=440, sr=16000):
     return 0.5 * np.sin(2 * np.pi * freq * t)
 
 
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 for cat in CATEGORIES:
     cat_dir = os.path.join(BASE_DIR, cat, "train")
     if not os.path.exists(cat_dir):
-        print(f"Warning: {cat_dir} not found. Please run 05_split_and_slice.py first to generate the train set.")
+        print(f"Warning: {cat_dir} not found.")
         continue
-        
+
     files = [f for f in os.listdir(cat_dir) if f.endswith(".wav") and "clean" in f]
-    files.sort()  # Először ABC sorrendbe, hogy a shuffle kiindulása mindig azonos legyen
+    files.sort()
     random.seed(42)
-    random.shuffle(files)  # Kevert sorrend, de seed(42)-vel mindig ugyanaz a keverés
-    
-    if len(files) == 0:
-        print(f"Warning: No clean files found in {cat_dir}.")
+    random.shuffle(files)
+
+    if not files:
+        print(f"Warning: no clean files in {cat_dir}.")
         continue
-        
-    # KIZÁRÓLAG a teljes train halmazt fűzzük össze a data leakage elkerülése és a maximális augmentáció érdekében
-    selected_files = files
 
     combined_audio = [create_beep(1.0, sr=SR), np.zeros(SR)]
-
-    for f in selected_files:
+    for f in files:
         data, _ = sf.read(os.path.join(cat_dir, f))
         combined_audio.append(data)
         combined_audio.append(np.zeros(int(SR * 0.2)))
 
-    final_audio = np.concatenate(combined_audio)
-    sf.write(os.path.join(OUTPUT_DIR, f"{cat}_for_mic.wav"), final_audio, SR)
-    print(f"{cat} done ({len(selected_files)} samples, sync beep prepended)")
+    sf.write(os.path.join(OUTPUT_DIR, f"{cat}_for_mic.wav"), np.concatenate(combined_audio), SR)
+    print(f"{cat}: {len(files)} samples concatenated")

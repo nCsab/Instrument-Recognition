@@ -8,23 +8,18 @@ import librosa
 from collections import deque
 from utils.feature_utils import extract_log_mel
 
-MODEL_TYPE = 'mic'  # 'clean' vagy 'mic'
+MODEL_TYPE = 'mic'
 MODEL_PATH = f"/Volumes/Kingston XS1000 Media/project/models_{MODEL_TYPE}/best_log_mel_2dcnn_model.keras"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 SR = 16000
 WINDOW_DURATION = 1.0
-STEP_DURATION = 0.25  # 0.5-ről 0.25-re csökkentve: másodpercenként 4 predikció! (Ez működik "Időbeli TTA"-ként is)
+STEP_DURATION = 0.25
 INPUT_SHAPE = (128, 63, 1)
 
-SMOOTHING_WINDOW = 6  # 4-ről 6-ra növelve, mivel 0.25s a lépés (így 1.5 másodpercet átlagol)
+SMOOTHING_WINDOW = 6
 HYSTERESIS_BONUS = 0.05
-
-# Adaptív küszöbértékek (noise-ra érzékenyebb, hangszerekre szigorúbb)
-THRESHOLDS = {
-    "noise": 0.20,      # A zajhoz elég 20% is
-    "default": 0.45     # A hangszerekhez legalább 45% kell
-}
+THRESHOLDS = {"noise": 0.20, "default": 0.45}
 
 CLASS_COLORS = {
     "guitar": "\033[93m",
@@ -40,12 +35,6 @@ RESET_COLOR = "\033[0m"
 audio_q = queue.Queue()
 
 
-# ============================================================
-# SpecAugment réteg definíciója (szükséges a modell betöltéséhez)
-# A súlyok betöltésekor a Keras-nak ismernie kell ezt az egyéni réteget.
-# Inference (valós idejű felismerés) során ez a réteg automatikusan
-# kikapcsol (training=False), tehát NEM módosítja a bemenetet.
-# ============================================================
 class SpecAugment(tf.keras.layers.Layer):
     def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, **kwargs):
         super().__init__(**kwargs)
@@ -56,28 +45,23 @@ class SpecAugment(tf.keras.layers.Layer):
     def call(self, inputs, training=None):
         if not training:
             return inputs
-
         augmented = inputs
         freq_dim = tf.shape(inputs)[1]
         time_dim = tf.shape(inputs)[2]
-
         for _ in range(self.num_masks):
             f = tf.random.uniform([], 1, self.freq_mask_param, dtype=tf.int32)
             f = tf.minimum(f, freq_dim)
             f0 = tf.random.uniform([], 0, freq_dim - f, dtype=tf.int32)
             indices = tf.range(freq_dim)
             freq_mask = tf.cast(tf.logical_or(indices < f0, indices >= f0 + f), tf.float32)
-            freq_mask = tf.reshape(freq_mask, [1, -1, 1, 1])
-            augmented = augmented * freq_mask
+            augmented = augmented * tf.reshape(freq_mask, [1, -1, 1, 1])
 
             t = tf.random.uniform([], 1, self.time_mask_param, dtype=tf.int32)
             t = tf.minimum(t, time_dim)
             t0 = tf.random.uniform([], 0, time_dim - t, dtype=tf.int32)
             indices_t = tf.range(time_dim)
             time_mask = tf.cast(tf.logical_or(indices_t < t0, indices_t >= t0 + t), tf.float32)
-            time_mask = tf.reshape(time_mask, [1, 1, -1, 1])
-            augmented = augmented * time_mask
-
+            augmented = augmented * tf.reshape(time_mask, [1, 1, -1, 1])
         return augmented
 
     def get_config(self):
@@ -91,12 +75,10 @@ class SpecAugment(tf.keras.layers.Layer):
 
 
 def build_model(input_shape, num_classes):
-    """Javított modell architektúra — meg kell egyeznie a tanító scriptben lévővel."""
     model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=input_shape),
         SpecAugment(freq_mask_param=15, time_mask_param=8, num_masks=2),
 
-        # 1. konvolúciós blokk
         tf.keras.layers.Conv2D(32, (3, 3), padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.ReLU(),
@@ -106,7 +88,6 @@ def build_model(input_shape, num_classes):
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
 
-        # 2. konvolúciós blokk
         tf.keras.layers.Conv2D(64, (3, 3), padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.ReLU(),
@@ -116,7 +97,6 @@ def build_model(input_shape, num_classes):
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
 
-        # 3. konvolúciós blokk
         tf.keras.layers.Conv2D(128, (3, 3), padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.ReLU(),
@@ -126,7 +106,6 @@ def build_model(input_shape, num_classes):
 
         tf.keras.layers.GlobalAveragePooling2D(),
         tf.keras.layers.Dropout(0.5),
-
         tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.Dropout(0.5),
@@ -142,27 +121,23 @@ def audio_callback(indata, frames, time, status):
 
 
 def normalize_features(feat):
-    normalized = (feat - (-80.0)) / (0.0 - (-80.0) + 1e-10)
-    return np.clip(normalized, 0.0, 1.0)
+    return np.clip((feat + 80.0) / (80.0 + 1e-10), 0.0, 1.0)
 
 
 def display_prediction(smoothed_probs, current_class):
     confidence = smoothed_probs[CLASSES.index(current_class)] * 100
     color = CLASS_COLORS.get(current_class, "")
-
     bar_len = 20
     filled = int(bar_len * (confidence / 100.0))
     bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
 
     output = f"\r{color}[ {bar} ] {current_class:7} ({confidence:5.1f}%){RESET_COLOR} | "
-
     other_parts = []
     for i, cls in enumerate(CLASSES):
         if cls != current_class:
             c = CLASS_COLORS.get(cls, "")
             other_parts.append(f"{c}{cls[0].upper()}:{int(smoothed_probs[i]*100)}%{RESET_COLOR}")
     output += " ".join(other_parts) + "     "
-
     sys.stdout.write(output)
     sys.stdout.flush()
 
@@ -177,12 +152,11 @@ def main():
     model.load_weights(MODEL_PATH)
 
     print(f"Smoothing: {SMOOTHING_WINDOW} frames ({SMOOTHING_WINDOW*STEP_DURATION:.1f}s)")
-    print(f"Confidence thresholds - Noise: {THRESHOLDS['noise']*100:.0f}%, Instruments: {THRESHOLDS['default']*100:.0f}%")
-    print(f"Hysteresis bonus: +{HYSTERESIS_BONUS*100:.0f}%\n")
+    print(f"Thresholds - Noise: {THRESHOLDS['noise']*100:.0f}%, Instruments: {THRESHOLDS['default']*100:.0f}%")
+    print(f"Hysteresis: +{HYSTERESIS_BONUS*100:.0f}%\n")
 
     stream = sd.InputStream(
-        channels=1,
-        samplerate=SR,
+        channels=1, samplerate=SR,
         callback=audio_callback,
         blocksize=int(SR * STEP_DURATION)
     )
@@ -192,11 +166,10 @@ def main():
     current_displayed_class = "noise"
 
     with stream:
-        print("\nListening... (Ctrl+C to stop)\n")
+        print("Listening... (Ctrl+C to stop)\n")
         try:
             while True:
                 chunk = audio_q.get().flatten()
-
                 full_buffer = np.roll(full_buffer, -len(chunk))
                 full_buffer[-len(chunk):] = chunk
 
@@ -206,24 +179,20 @@ def main():
                 elif feat_raw.shape[1] > INPUT_SHAPE[1]:
                     feat_raw = feat_raw[:, :INPUT_SHAPE[1]]
 
-                feat = normalize_features(feat_raw)
-                X = feat.reshape(1, INPUT_SHAPE[0], INPUT_SHAPE[1], 1)
-
+                X = normalize_features(feat_raw).reshape(1, INPUT_SHAPE[0], INPUT_SHAPE[1], 1)
                 pred_prob = model.predict(X, verbose=0)[0]
                 prob_history.append(pred_prob)
 
                 smoothed = np.mean(prob_history, axis=0)
-
                 adjusted = smoothed.copy()
-                current_idx = CLASSES.index(current_displayed_class)
-                adjusted[current_idx] += HYSTERESIS_BONUS
+                adjusted[CLASSES.index(current_displayed_class)] += HYSTERESIS_BONUS
 
                 new_idx = np.argmax(adjusted)
                 new_class = CLASSES[new_idx]
 
                 if new_class != current_displayed_class:
-                    required_thresh = THRESHOLDS["noise"] if new_class == "noise" else THRESHOLDS["default"]
-                    if smoothed[new_idx] >= required_thresh:
+                    thresh = THRESHOLDS["noise"] if new_class == "noise" else THRESHOLDS["default"]
+                    if smoothed[new_idx] >= thresh:
                         current_displayed_class = new_class
 
                 display_prediction(smoothed, current_displayed_class)

@@ -5,99 +5,68 @@ import shutil
 DATASET_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 
+
 def get_group_id(filename):
-    # Kinyeri a csoport azonosítót pl. "guitar_clean_group15_clip02.wav" -> "group15"
     match = re.search(r"group\d+", filename)
     return match.group(0) if match else None
 
+
 def balance_class(cls):
-    cls_dir = os.path.join(DATASET_DIR, cls)
-    val_dir = os.path.join(cls_dir, "val")
-    test_dir = os.path.join(cls_dir, "test")
+    val_dir = os.path.join(DATASET_DIR, cls, "val")
+    test_dir = os.path.join(DATASET_DIR, cls, "test")
 
     if not os.path.exists(val_dir) or not os.path.exists(test_dir):
-        print(f"Hiba: {cls} esetében nem található a val vagy test mappa.")
+        print(f"Error: {cls} - val or test directory not found.")
         return
 
-    # Fájlok beolvasása
     val_files = [f for f in os.listdir(val_dir) if f.endswith('.wav')]
     test_files = [f for f in os.listdir(test_dir) if f.endswith('.wav')]
+    initial_val, initial_test = len(val_files), len(test_files)
 
-    initial_val_count = len(val_files)
-    initial_test_count = len(test_files)
-
-    # Blokkok szerint csoportosítás
-    # Kulcs: group_id, Érték: { "current_dir": dir_path, "files": [filenames] }
     blocks = {}
-
     for f in val_files:
-        group_id = get_group_id(f)
-        if not group_id:
-            continue
-        if group_id not in blocks:
-            blocks[group_id] = {"current_dir": val_dir, "files": []}
-        blocks[group_id]["files"].append(f)
-
+        gid = get_group_id(f)
+        if gid:
+            blocks.setdefault(gid, {"current_dir": val_dir, "files": []})["files"].append(f)
     for f in test_files:
-        group_id = get_group_id(f)
-        if not group_id:
-            continue
-        if group_id not in blocks:
-            blocks[group_id] = {"current_dir": test_dir, "files": []}
-        blocks[group_id]["files"].append(f)
+        gid = get_group_id(f)
+        if gid:
+            blocks.setdefault(gid, {"current_dir": test_dir, "files": []})["files"].append(f)
 
-    # Mohó elosztás a szeletszámok kiegyenlítésére
-    # Rendezzük a blokkokat csökkenő sorrendbe a szeletek száma szerint
     sorted_blocks = sorted(blocks.items(), key=lambda x: len(x[1]["files"]), reverse=True)
 
-    new_val_blocks = []
-    new_test_blocks = []
-    val_clip_count = 0
-    test_clip_count = 0
+    new_val, new_test = [], []
+    val_count, test_count = 0, 0
 
-    for group_id, info in sorted_blocks:
-        clip_count = len(info["files"])
-        # Mindig oda tesszük, ahol kevesebb szelet van jelenleg
-        if val_clip_count <= test_clip_count:
-            new_val_blocks.append((group_id, info))
-            val_clip_count += clip_count
+    for gid, info in sorted_blocks:
+        n = len(info["files"])
+        if val_count <= test_count:
+            new_val.append((gid, info)); val_count += n
         else:
-            new_test_blocks.append((group_id, info))
-            test_clip_count += clip_count
+            new_test.append((gid, info)); test_count += n
 
-    # Fájlok átmozgatása a döntés alapján
-    moved_count = 0
-    
-    # Val-ba helyezendő fájlok átrakása, ha jelenleg a test-ben vannak
-    for group_id, info in new_val_blocks:
+    moved = 0
+    for _, info in new_val:
         if info["current_dir"] == test_dir:
             for f in info["files"]:
-                src = os.path.join(test_dir, f)
-                dst = os.path.join(val_dir, f)
-                shutil.move(src, dst)
-                moved_count += 1
-
-    # Test-be helyezendő fájlok átrakása, ha jelenleg a val-ban vannak
-    for group_id, info in new_test_blocks:
+                shutil.move(os.path.join(test_dir, f), os.path.join(val_dir, f)); moved += 1
+    for _, info in new_test:
         if info["current_dir"] == val_dir:
             for f in info["files"]:
-                src = os.path.join(val_dir, f)
-                dst = os.path.join(test_dir, f)
-                shutil.move(src, dst)
-                moved_count += 1
+                shutil.move(os.path.join(val_dir, f), os.path.join(test_dir, f)); moved += 1
 
-    print(f"{cls:<10} | Eredeti: Val={initial_val_count:<3} Test={initial_test_count:<3} | Új: Val={val_clip_count:<3} Test={test_clip_count:<3} | Mozgatott fájlok: {moved_count}")
+    print(f"{cls:<10} | Before: Val={initial_val:<3} Test={initial_test:<3} | After: Val={val_count:<3} Test={test_count:<3} | Moved: {moved}")
+
 
 def main():
-    print("\n" + "="*70)
-    print("VAL ÉS TEST HALMAZOK KIEGYENLÍTÉSE (BLOKK SZINTEN)")
-    print("="*70)
-    
+    print("\n" + "=" * 60)
+    print("BALANCING VAL/TEST SETS (BLOCK-LEVEL)")
+    print("=" * 60)
     for cls in CLASSES:
         balance_class(cls)
-        
-    print("="*70)
-    print("Kiegyenlítés sikeresen befejeződött!\n")
+    print("=" * 60)
+    print("Done.\n")
+
 
 if __name__ == "__main__":
     main()

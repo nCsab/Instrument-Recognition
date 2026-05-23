@@ -11,15 +11,16 @@ PREVIEW_PER_CLASS = 3
 SR = 16000
 
 
-def process_batch_dataset(dataset_path, output_path, aug_samples_path):
+def process_batch_dataset(dataset_path, output_path, aug_samples_path, extract_raw=False):
     os.makedirs(output_path, exist_ok=True)
-    os.makedirs(aug_samples_path, exist_ok=True)
+    if aug_samples_path:
+        os.makedirs(aug_samples_path, exist_ok=True)
 
     saved_per_class = {}
     data = {
-        'train': {'log_mel': [], 'stft': [], 'mfcc': [], 'labels': []},
-        'val':   {'log_mel': [], 'stft': [], 'mfcc': [], 'labels': []},
-        'test':  {'log_mel': [], 'stft': [], 'mfcc': [], 'labels': []}
+        'train': {'log_mel': [], 'stft': [], 'mfcc': [], 'raw': [], 'labels': []},
+        'val':   {'log_mel': [], 'stft': [], 'mfcc': [], 'raw': [], 'labels': []},
+        'test':  {'log_mel': [], 'stft': [], 'mfcc': [], 'raw': [], 'labels': []}
     }
 
     if not os.path.exists(dataset_path):
@@ -71,24 +72,35 @@ def process_batch_dataset(dataset_path, output_path, aug_samples_path):
                     if len(y) < SR:
                         continue
                     segment = y[:SR]
+                    if len(segment) < SR:
+                        segment = np.pad(segment, (0, SR - len(segment)))
+                    segment = segment[:SR]
 
                     data[subset]['log_mel'].append(extract_log_mel(segment))
                     data[subset]['stft'].append(extract_stft(segment))
                     data[subset]['mfcc'].append(z_score_normalize(extract_mfcc(segment)))
+                    if extract_raw:
+                        data[subset]['raw'].append(segment)
                     data[subset]['labels'].append(label_idx)
 
                     if subset == 'train' and class_name != 'noise' and "_mic_" not in f:
                         aug_y = apply_macbook_augment(segment.copy(), noise_files, noise_path=noise_dir, sr=SR)
+                        if len(aug_y) < SR:
+                            aug_y = np.pad(aug_y, (0, SR - len(aug_y)))
+                        aug_y = aug_y[:SR]
 
-                        class_saved = saved_per_class.get(class_name, 0)
-                        if class_saved < PREVIEW_PER_CLASS:
-                            sf.write(os.path.join(aug_samples_path, f"{class_name}_{class_saved:02d}_ORIGINAL.wav"), segment, SR)
-                            sf.write(os.path.join(aug_samples_path, f"{class_name}_{class_saved:02d}_AUGMENTED.wav"), aug_y, SR)
-                            saved_per_class[class_name] = class_saved + 1
+                        if aug_samples_path:
+                            class_saved = saved_per_class.get(class_name, 0)
+                            if class_saved < PREVIEW_PER_CLASS:
+                                sf.write(os.path.join(aug_samples_path, f"{class_name}_{class_saved:02d}_ORIGINAL.wav"), segment, SR)
+                                sf.write(os.path.join(aug_samples_path, f"{class_name}_{class_saved:02d}_AUGMENTED.wav"), aug_y, SR)
+                                saved_per_class[class_name] = class_saved + 1
 
                         data[subset]['log_mel'].append(extract_log_mel(aug_y))
                         data[subset]['stft'].append(extract_stft(aug_y))
                         data[subset]['mfcc'].append(z_score_normalize(extract_mfcc(aug_y)))
+                        if extract_raw:
+                            data[subset]['raw'].append(aug_y)
                         data[subset]['labels'].append(label_idx)
 
                 except Exception as e:
@@ -102,11 +114,16 @@ def process_batch_dataset(dataset_path, output_path, aug_samples_path):
             continue
 
         print(f"\nSubset: {subset}")
-        for feat_name in ['log_mel', 'stft', 'mfcc']:
+        feats_to_save = ['log_mel', 'stft', 'mfcc']
+        if extract_raw:
+            feats_to_save.append('raw')
+
+        for feat_name in feats_to_save:
             X = np.array(data[subset][feat_name])
-            X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
-            if feat_name != 'mfcc':
-                X = (X - X.min()) / (X.max() - X.min() + 1e-10)
+            if feat_name != 'raw':
+                X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
+                if feat_name != 'mfcc':
+                    X = (X - X.min()) / (X.max() - X.min() + 1e-10)
             save_path = os.path.join(output_path, f"X_{feat_name}_{subset}.npy")
             np.save(save_path, X)
             print(f"  {feat_name}: {X.shape} -> {save_path}")
@@ -121,23 +138,21 @@ def main():
 
     clean_path = os.path.join(project_dir, "hybrid_dataset_own_final")
     clean_out = os.path.join(project_dir, "processed_data_clean")
-    clean_aug = os.path.join(project_dir, "augmented_samples_clean")
 
     if os.path.exists(clean_path):
         print("\n" + "=" * 60)
         print("FEATURE EXTRACTION - CLEAN DATASET")
         print("=" * 60)
-        process_batch_dataset(clean_path, clean_out, clean_aug)
+        process_batch_dataset(clean_path, clean_out, aug_samples_path=None, extract_raw=False)
 
     mic_path = os.path.join(project_dir, "hybrid_dataset_own_final_mic")
     mic_out = os.path.join(project_dir, "processed_data_mic")
-    mic_aug = os.path.join(project_dir, "augmented_samples_mic")
 
     if os.path.exists(mic_path):
         print("\n" + "=" * 60)
-        print("FEATURE EXTRACTION - MIC DATASET")
+        print("FEATURE EXTRACTION - MIC DATASET (with raw segments for YAMNet)")
         print("=" * 60)
-        process_batch_dataset(mic_path, mic_out, mic_aug)
+        process_batch_dataset(mic_path, mic_out, aug_samples_path=None, extract_raw=True)
 
     print("\nDone.")
 

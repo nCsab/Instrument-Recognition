@@ -19,14 +19,14 @@ source venv/bin/activate
 
 Az indítás a következő parancs futtatásával történik:
 \begin{lstlisting}
-python scripts/07_realtime_recognition.py
+python scripts/05a_realtime_recognition.py
 \end{lstlisting}
 
 Az alkalmazás indításakor a konzolon megjelennek a konfigurációs paraméterek, a betanított Keras modell betöltésének állapota, valamint az élő jelfeldolgozási folyamat megkezdését jelző üzenet (lásd a \ref{fig:realtime_setup}.~ábrát):
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{fig_realtime_setup.png}
+    \includegraphics[width=0.75\textwidth]{fig_realtime_setup.png}
     \caption{Az alkalmazás indításakor megjelenő konfigurációs és betöltési paraméterek}
     \label{fig:realtime_setup}
 \end{figure}
@@ -38,8 +38,8 @@ A valós idejű visszajelzést egy dinamikusan frissülő terminálsor (CLI Dash
 
 A kijelző sor három fő vizuális komponensből áll:
 \begin{enumerate}
-    \item \textbf{Dinamikus konfidencia-sáv:} Egy 20 karakter hosszúságú grafikus sáv, amely a felismert hangszer valószínűségét ábrázolja vizuálisan. A teli blokk (\texttt{█}) karakterek a konfidencia nagyságát mutatják, míg a satírozott (\texttt{░}) karakterek a fennmaradó részt.
-    \item \textbf{Aktív osztály és konfidencia érték:} A felismert hangszer megnevezése és a kiszámított valószínűségi százalékos érték (tizedes pontossággal).
+    \item \textbf{Dinamikus konfidencia-sáv:} Egy 20 karakter hosszúságú grafikus sáv, amely a felismert hangszer valószínűségét ábrázolja vizuálisan. 
+    \item \textbf{Aktív osztály és konfidencia érték:} A felismert hangszer megnevezése és a kiszámított valószínűségi százalékos érték (tizedes pontossággal). A kijelzőn látható aktív kategória csak akkor vált át egy új hangszerre vagy csendre, ha annak simított valószínűsége a háttérben meghaladja a beépített biztonsági küszöbértéket (hangszerek esetén $45\%$, zaj/csend esetén $20\%$). Ezzel biztosítja a program a stabil vizuális visszajelzést.
     \item \textbf{Másodlagos osztályok valószínűségei:} A többi hangszerosztály rövidített jelölése (G: Gitár, P: Zongora, V: Vokál, S: Vonós, R: Nádfúvós, B: Rézfúvós, N: Zaj/Csend) és azok pillanatnyi valószínűségi értékei, amelyek segítenek a felhasználónak átlátni a modell bizonytalansági tényezőit és az átfedéseket.
 \end{enumerate}
 
@@ -76,7 +76,7 @@ Amikor a szobában nincs aktív hangszeres játék, csak a számítógép ventil
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{fig_realtime_noise.png}
+    \includegraphics[width=0.6\textwidth]{fig_realtime_noise.png}
     \caption{A rendszer kimenete csendes szobai környezet (zaj) esetén}
     \label{fig:realtime_noise}
 \end{figure}
@@ -86,7 +86,7 @@ Amikor a felhasználó megszólaltat egy akusztikus gitárt a mikrofon közeléb
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{fig_realtime_guitar.png}
+    \includegraphics[width=0.6\textwidth]{fig_realtime_guitar.png}
     \caption{A rendszer kimenete akusztikus gitárjáték érzékelésekor}
     \label{fig:realtime_guitar}
 \end{figure}
@@ -96,24 +96,20 @@ Amikor a felhasználó énekelni vagy beszélni kezd a mikrofonba, a kijelző az
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{fig_realtime_vocal.png}
+    \includegraphics[width=0.6\textwidth]{fig_realtime_vocal.png}
     \caption{A rendszer kimenete emberi énekhang (vokál) érzékelésekor}
     \label{fig:realtime_vocal}
 \end{figure}
 
 \subsection{4. teszteset: Szaxofon játék (átmeneti bizonytalanság)}
-A konfúziós mátrix elemzésénél láttuk, hogy a nádfúvósok és rézfúvósok között a legmagasabb a tévesztési arány. Amikor a felhasználó szaxofonon játszik, a modell kezdetben a rézfúvós és nádfúvós osztályok között oszcillálhat. A hiszterézis bónusz ($+5\%$) és a konfidencia-küszöb ($30\%$) megakadályozza a kijelző gyors villogását: a kijelző narancssárga \texttt{reed} színben marad mindaddig, amíg a rézfúvós alternatíva át nem lépi a biztonsági küszöböt (lásd a \ref{fig:realtime_reed}.~ábrát):
+Amikor a felhasználó szaxofonon játszik, a modell kezdetben a rézfúvós és nádfúvós osztályok között oszcillálhat az akusztikai hasonlóságok miatt. A hiszterézis bónusz és a konfidencia-küszöb azonban stabilizálja az eredményt, így a kijelző fixen narancssárga \texttt{reed} színben marad (lásd a \ref{fig:realtime_reed}.~ábrát):
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{fig_realtime_reed.png}
+    \includegraphics[width=0.6\textwidth]{fig_realtime_reed.png}
     \caption{A rendszer kimenete szaxofon játék (reed) érzékelésekor}
     \label{fig:realtime_reed}
 \end{figure}
 
 \subsection{Az alkalmazás leállítása}
-A felhasználó bármikor megszakíthatja az élő elemzést a terminálban kiadott \texttt{Ctrl+C} billentyűkombinációval. Ekkor a parancssori visszahívási szálak lezárulnak, a mikrofonbemenet felszabadul, és a program tiszta állapotban kilép a terminálba:
-
-\begin{lstlisting}
-Stopped.
-\end{lstlisting}
+A felhasználó bármikor megszakíthatja az élő elemzést a terminálban kiadott \texttt{Ctrl+C} billentyűkombinációval. Ekkor a parancssori visszahívási szálak lezárulnak, a mikrofonbemenet felszabadul, és a program tiszta állapotban kilép a terminálba, egy rövid \texttt{Stopped.} üzenet kíséretében.

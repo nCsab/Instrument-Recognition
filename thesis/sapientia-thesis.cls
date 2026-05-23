@@ -37,10 +37,15 @@
 \RequirePackage{amsmath}
 \RequirePackage{pdfpages}
 \RequirePackage[hidelinks]{hyperref}
+\RequirePackage{xurl}
 \RequirePackage[backend=biber,
   style=numeric,
   sorting=none,          % keep citation order
   maxbibnames=99]{biblatex}
+\setcounter{biburllcpenalty}{100}
+\setcounter{biburlucpenalty}{100}
+\setcounter{biburlnumpenalty}{100}
+\appto{\bibsetup}{\sloppy}
 
 % ── Code listings ───────────────────────────────────────────────────────────
 \RequirePackage{listings}

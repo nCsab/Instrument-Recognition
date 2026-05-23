@@ -1,5 +1,5 @@
 \chapter{Részletes tervezés}
-\label{chap:tervezes}A következő fejezetben részletes betekintés nyújtok, organikus adathalmazzal rendelkező, saját célú hangszerfelismerő rendszer felépítésébe, ismertetve minden tervezési lépést. Ez többek között tartalmazza az adatkészlet létrehozását, a jellemzési paramétereket, az adatbővítési beállításokat és a 2D konvolúciós neurális hálózatokat, végül a valós idejű hangszerfelismerő modul tervezését.
+\label{chap:tervezes}A következő fejezetben részletes betekintés nyújtok, organikus adathalmazzal rendelkező, saját célú hangszerfelismerő rendszer felépítésébe, ismertetve minden tervezési lépést. Ez többek között tartalmazza az adatkészlet létrehozását, a jellemzési paramétereket, az adatbővítési beállításokat és a 2D konvolúciós neurális hálózatokat, a YAMNet transzfer tanulási architektúrát, végül a valós idejű hangszerfelismerő modul tervezését.
 
 %% ═══════════════════════════════════════════════════════════════════════════
 \section{Az adathalmaz tervezése}
@@ -51,7 +51,13 @@ Kezdetben a létező adathalmazokat vizsgáltam, hogy megértsem, hogyan érdeme
 Megállapítottam, hogy a meglévő adathalmazok teljes vagy részleges felhasználása nem felel meg az igényeimnek. Minden adathalmaz mintái eltérő hosszúságúak, más a hangszerosztályok eloszlása, rengeteg mintát tartalmaznak, és különböző céllal jöttek létre. Emiatt – bár kiváló tervezési alapul szolgáltak – a feldolgozásuk egységesítése komplex feladat lenne, és az átválogatásuk is rengeteg időt igényelne. Egy organikus, a saját elképzeléseim alapján összeállított adathalmaz biztosabb és átláthatóbb alapokat nyújt egy jól működő modell megteremtéséhez. 
 Ez alól kivételt képezett az ESC-50, amely sokféle környezeti és háttérzaj-mintát foglal magába, így hiánypótlóként szolgált egy mindenre kiterjedő zajos adathalmaz összeállításához.
 
-Az interneten található zenei felvételekből válogattam, figyelmet fordítva az aktuális hangszerek karakterességének kiemelésére és a zenei játék változatosságára. Minden hangszerosztályhoz (gitár, zongora, ének, vonós, nád- és rézfúvós) nagyjából 100--150 darab interneten elérhető felvételt választottam ki. Minden feldolgozott felvételből a zenei tartalom függvényében egy vagy két 5~másodperces részletet vágtam ki, amelyet egy előkészítő szkript (\texttt{owndataset/dataset.py}) szeletelt fel 1~másodperces, átfedésmentes mintákra. Ez osztályonként 500~darab, többnyire monofón, stúdió- és szobaminőségű mintát eredményezett.
+Az interneten található zenei felvételekből válogattam, figyelmet fordítva az aktuális hangszerek karakterességének kiemelésére és a zenei játék változatosságára. Minden hangszerosztályhoz (gitár, zongora, ének, vonós, nád- és rézfúvós) nagyjából 100--150 darab interneten elérhető felvételt választottam ki, amelyekből az eredeti forrás zenei tartalmának függvényében 5 másodperces blokkokat vágtam ki. 
+
+Ezen a ponton egy kritikus tervezési döntést hoztam a gépi tanulásban gyakran felmerülő adatszivárgás (data leakage) elkerülése érdekében. Ha a darabolást rögtön végrehajtom, majd az összes 1 másodperces szeletet utólag osztom szét, nagy az esélye annak, hogy ugyanannak a hangszernek ugyanabból a zenei frázisából kerüljenek minták mind a tanító (train), mind a validációs (val) vagy teszt (test) halmazba. Ez túlzottan optimista, hamis eredménybecsléshez (túltanuláshoz, azaz overfittinghez) vezetne, mivel a modell szinte azonos hangokat látna a teszteléskor, mint a tanításkor.
+
+Ennek elkerülésére a \texttt{01\_prepare\_clean\_dataset.py} szkript segítségével először a teljes, 5 másodperces blokkokat kevertem meg és osztottam fel a tanító (70\%), validációs (15\%) és tesztelő (15\%) halmazokra. Ezt a műveletet úgynevezett \textbf{rétegzett (stratified) felosztással} végeztem el, ami garantálja, hogy a szkript minden egyes hangszerosztálynál önállóan és szigorúan betartsa ezt az arányt, így az osztályok eloszlása mindhárom halmazban (train, val, test) tökéletesen megegyező és kiegyensúlyozott marad. A szkript csak ezután – a már szigorúan szeparált blokkokat – szeletelte fel 1 másodperces, átfedésmentes klipekre, megőrizve a szeparáció integritását. Ezáltal biztosítható, hogy a kiértékelési halmazok (val/test) eredményei teljesen megbízhatóak, és a modell nem tud ,,csalni''.
+
+Ez a folyamat hangszertípusonként nagyjából 500 darab, többnyire monofón, stúdió- és szobaminőségű mintát eredményezett. A teljes tiszta adathalmaz (beleértve az ESC-50-ből származó kiterjedt zaj osztályt is) így összesen 4428 mintából áll.
 
 Fontosnak tartom hangsúlyozni, hogy az internetről gyűjtött zenei hangmintákat kizárólag kutatási és oktatási (akadémiai) célokra használom fel. Ezeket a mintákat önmagukban nem teszem közzé, nem terjesztem nyilvánosan, és semmilyen kereskedelmi vagy pénzszerzési célra sem használom fel. Ez a megközelítés teljesen analóg a nagy technológiai vállalatok által alkalmazott gyakorlattal, ahol a nyilvánosan elérhető adatokat szigorúan a modellek tanítására használják fel (a szabad felhasználás, azaz a \textit{fair use} elve alapján), miközben maguk a nyers forrásfájlok zártak maradnak.
 
@@ -61,47 +67,48 @@ Az adathalmaz eloszlását ezen lépés után a \ref{fig:organic_class_distribut
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    ybar,
+    ybar stacked,
     bar width=16pt,
     enlargelimits=0.15,
     ylabel={Minták száma},
     symbolic x coords={Gitár, Zongora, Vokál, Húr, Nád, Réz, Zaj},
     xtick=data,
     ymin=0,
-    ymax=600,
+    ymax=1600,
     width=0.9\textwidth,
-    height=6cm,
+    height=6.5cm,
     axis x line*=bottom,
     axis y line*=left,
     ymajorgrids=true,
     grid style={dashed, gray!30},
-    nodes near coords,
-    nodes near coords align={anchor=south},
-    every node near coord/.append style={font=\footnotesize},
-    cycle list={
-        {fill=blue!60!gray, draw=none}
-    }
+    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=-1},
 ]
-\addplot coordinates {
-    (Gitár,500) (Zongora,500) (Vokál,500) (Húr,500) (Nád,500) (Réz,500) (Zaj,500)
+\addplot[fill=blue!60!gray, draw=none] coordinates {
+    (Gitár,350) (Zongora,353) (Vokál,349) (Húr,350) (Nád,350) (Réz,352) (Zaj,994)
 };
+\addplot[fill=green!60!gray, draw=none] coordinates {
+    (Gitár,75) (Zongora,76) (Vokál,75) (Húr,75) (Nád,75) (Réz,76) (Zaj,213)
+};
+\addplot[fill=red!60!gray, draw=none] coordinates {
+    (Gitár,75) (Zongora,76) (Vokál,75) (Húr,75) (Nád,75) (Réz,76) (Zaj,213)
+};
+\legend{Train (70\%), Val (15\%), Test (15\%)}
 \end{axis}
 \end{tikzpicture}
-\caption{A saját gyűjtésű organikus adathalmaz osztályonkénti eloszlása a szeletelés után}
+\caption{A saját gyűjtésű organikus adathalmaz eloszlása a szeparált szeletelés után}
 \label{fig:organic_class_distribution}
 \end{figure}
 
-
-\subsection{Mikrofonos újrafelvétel a robusztusság érdekében}
+\subsection{Mikrofonos újrafelvétel a valós idejű kiértékelés felkészítésének érdekében}
 \label{subsec:mic_recording}
 
 A kezdeti adatkészleteim önmagukban kevés zajos mintát tartalmaznak, melyeket az eredeti felvételt készítő eszköz mikrofonjával rögzítettek. Minden mikrofonnak saját jellemzői vannak: frekvencia-válasza, érzékenysége, torzítása, belső zaja és maximális hangnyomásszintje (SPL). Mivel a projektem célja a valós idejű hangszerfelismerés is, a modell stabilitásának kialakításához elengedhetetlen az optimalizálás a saját eszközünkre, amellyel a predikció megtörténik.
 
-A robusztusság biztosítására egy speciális eljárást találtam ki. Mivel nem férek hozzá, és játszani sem tudok ennyiféle hangszeren, a telefon hangszóróján játszom vissza a mintákat a laptopom beépített mikrofonjába. A feljátszás 10--30~cm távolságról történik a beépített mikrofon pontos helyzetétől mérve, hogy a hang a közelség miatt se legyen túl torz, de a távolság miatt se váljon értelmezhetetlenné vagy túl halkká.
+A valós idejű kiértékelésre való felkészítés érdekében egy speciális eljárást találtam ki. Mivel nem férek hozzá, és játszani sem tudok ennyiféle hangszeren, a telefon hangszóróján játszom vissza a mintákat a laptopom beépített mikrofonjába. A feljátszás 10--30~cm távolságról történik a beépített mikrofon pontos helyzetétől mérve, hogy a hang a közelség miatt se legyen túl torz, de a távolság miatt se váljon értelmezhetetlenné vagy túl halkká.
 
-Ismételten kiválogatni és a telefonon egyenként feljátszani osztályonként 500 mintát, majd így kialakítani az optimális zajos adathalmazt, költséges és meg nem térülő folyamat. Ennek kiküszöbölésére azt találtam ki, hogy egy automatizációs script (\texttt{02\_mic\_\allowbreak prep\_\allowbreak concatenate.py}) segítségével osztályonként összefűzöm a minták 50\%-át (ez az arány biztosítja a megfelelő egyensúlyt a tiszta stúdióminőségű és a mikrofonnal rögzített zajos minták között, megakadályozva a laptop saját torzításaira való túltanulást), majd ezt telefonról visszajátszva felvételezem (\texttt{03\_mic\_\allowbreak record\_\allowbreak audio.py}), és szeletelem (\texttt{04\_mic\_\allowbreak slice\_\allowbreak audio.py}) hasonlóan az internetes adathalmaz kialakításánál.
+A több ezer minta egyenkénti feljátszása helyett egy automatizált munkafolyamatot alakítottam ki. Egyetlen közös script (\texttt{02\_acquire\_\allowbreak mic\_\allowbreak data.py}) segítségével először osztályonként összefűzöm a tiszta adatok 70\%-át kitevő tanító (train) halmaz mintáit, a telefonról visszajátszva egyben felvételezem, majd a szoftver automatikusan újra felszeleteli azokat. Ezt követően egy dedikált script (\texttt{03a\_merge\_\allowbreak mic\_\allowbreak to\_\allowbreak train.py}) végzi el az új mikrofonos minták célirányos fúzióját a tanító adathalmazzal. Kritikus tervezési döntés, hogy ezt a mikrofonos újrafelvételt kizárólag a tanító halmazon végzem el, míg a validációs és teszt halmazok teljesen ,,tiszták'' maradnak. Ezzel elkerülhető az adatszivárgás (data leakage): ha a modell a tesztelés során a saját mikrofonunk már megismert alapzajával és torzításával találkozna, a specifikus zajokat felismerve ,,csalhatna''. A tiszta kiértékelő halmazok garantálják, hogy a modell valós generalizációs képességét mérjük egy számára teljesen ismeretlen akusztikai környezetben.
 
-Ebben az esetben azonban a telefon lejátszásának és a laptop beépített mikrofonjának felvételezésének szinkronizációjára van szükség. A pontos szinkronizáció megvalósításához a következő folyamatot alakítottam ki: a \texttt{02\_mic\_\allowbreak prep\_\allowbreak concatenate.py} scripttel az összefűzött hanganyag legelejére egy 1~másodperces, 440~Hz-es szinuszos szinkronizációs sípszót generálok, a hangszeres mintákat pedig 0,2~másodperces csendes szakaszokkal választom el egymástól. A telefonról történő visszajátszás alatt a laptopomon futó \texttt{03\_mic\_\allowbreak record\_\allowbreak audio.py} script rögzíti a beérkező jelet 16\,000~Hz-es mintavételezéssel, mono formátumban. Végül a \texttt{04\_mic\_\allowbreak slice\_\allowbreak audio.py} script a Librosa könyvtár segítségével detektálja a felvétel elején található sípszó végét, majd ettől a ponttól kiindulva szeleteli fel a hanganyagot pontosan 1~másodperces egységekre, miközben automatikusan kiszűri a csendes részeket.
+Ebben az esetben azonban a telefon lejátszásának és a laptop beépített mikrofonjának felvételezésének szinkronizációjára van szükség. A pontos szinkronizáció megvalósításához a következő folyamatot alakítottam ki: a \texttt{02\_acquire\_\allowbreak mic\_\allowbreak data.py} script első előkészítő lépése a hanganyag legelejére egy 1~másodperces, 440~Hz-es szinuszos szinkronizációs sípszót generál, a hangszeres mintákat pedig 0,2~másodperces csendes szakaszokkal választja el egymástól. A telefonról történő visszajátszás alatt ugyanez a script rögzíti a beérkező jelet 16\,000~Hz-es mintavételezéssel, mono formátumban. Végül a script szeletelő funkciója a Librosa könyvtár segítségével detektálja a felvétel elején található sípszó végét, majd ettől a ponttól kiindulva felszeleteli a hanganyagot pontosan 1~másodperces egységekre, miközben automatikusan kiszűri a csendes részeket.
  
 Az automatizált mikrofonos újrafelvételi és szeletelési munkafolyamatot a \ref{fig:mic_recording_pipeline}.~ábra szemlélteti.
 
@@ -113,12 +120,12 @@ Az automatizált mikrofonos újrafelvételi és szeletelési munkafolyamatot a \
     arrow/.style={thick,->,>=stealth}
 ]
 % Nodes
-\node (orig) [block] {Eredeti minták (50\%)};
+\node (orig) [block] {Tiszta train minták (70\%)};
 \node (concat) [block, right=0.8cm of orig] {Összefűzés (szinkronizációs sípszóval)};
 \node (play) [block, right=0.8cm of concat] {Lejátszás (Telefon)};
 \node (record) [block, below=1.2cm of play] {Laptop rögzítés (Beépített mikrofon)};
 \node (sync) [block, left=0.8cm of record] {Szinkronizáció (sípszó detektálás)};
-\node (slice) [block, left=0.8cm of sync] {Szeletelés (1~s WAV minták)};
+\node (slice) [block, left=0.8cm of sync] {Szeletelés és beolvasztás (Train)};
 
 % Arrows
 \draw [arrow] (orig) -- (concat);
@@ -132,7 +139,7 @@ Az automatizált mikrofonos újrafelvételi és szeletelési munkafolyamatot a \
 \label{fig:mic_recording_pipeline}
 \end{figure}
 
-Az újrafelvételi folyamat eredményeképpen az eredeti, tiszta minták mellé osztályonként további 250 darab (összesen 1500 darab) mikrofonos karakterisztikájú minta kerül. Ez a bővítmény hordozza a laptopom beépített mikrofonjának torzításait, frekvencia-válaszát és belső zaját, biztosítva ezzel a modell későbbi robusztusságát. Az adathalmaz aktuális összetételét és a minták felhalmozódását a \ref{fig:mic_recorded_distribution}.~ábra szemlélteti egymásra épülő (stacked) formában, különválasztva az internetes tiszta és az internetes újrafelvett minták arányát. Fontos megjegyezni, hogy a Zaj osztály esetében nem végeztem ilyen újrafelvételt: az ebből a kategóriából származó ESC-50 minták eleve valós környezeti és háttérzajokat tartalmaznak, így teljesen feleslegesnek tartottam a szélzaj vagy az eső hangját telefonról visszajátszva újra felvenni, ráadásul ez a lejátszási lánc miatt szükségtelen egyedi torzulásokat is vinne a tiszta zajmintákba.
+Az újrafelvételi folyamat eredményeképpen kizárólag a tanító (train) halmaz eredeti, tiszta mintái mellé kerülnek be az új, mikrofonos karakterisztikájú minták. Ez a bővítmény hordozza a laptopom beépített mikrofonjának torzításait, frekvencia-válaszát és belső zaját, felkészítve ezzel a modellt a valós idejű kiértékelés kihívásaira. Az adathalmaz aktuális összetételét és a minták felhalmozódását a \ref{fig:mic_recorded_distribution}.~ábra szemlélteti egymásra épülő (stacked) formában, halmazok (Train, Val, Test) és rögzítési mód (Tiszta, Mikrofonos) szerint különválasztva. Fontos megjegyezni, hogy a Zaj osztály esetében nem végeztem ilyen újrafelvételt: az ebből a kategóriából származó ESC-50 minták eleve valós környezeti és háttérzajokat tartalmaznak, így teljesen feleslegesnek tartottam a szélzaj vagy az eső hangját telefonról visszajátszva újra felvenni, ráadásul ez a lejátszási lánc miatt szükségtelen egyedi torzulásokat is vinne a tiszta zajmintákba.
 
 \begin{figure}[H]
 \centering
@@ -147,22 +154,26 @@ Az újrafelvételi folyamat eredményeképpen az eredeti, tiszta minták mellé 
     ymin=0,
     ymax=1800,
     width=0.9\textwidth,
-    height=6.5cm,
+    height=7cm,
     axis x line*=bottom,
     axis y line*=left,
     ymajorgrids=true,
     grid style={dashed, gray!30},
-    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=-1},
-    nodes near coords,
-    every node near coord/.append style={font=\footnotesize},
+    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=2},
 ]
 \addplot[fill=blue!60!gray, draw=none] coordinates {
-    (Gitár,500) (Zongora,500) (Vokál,500) (Húr,500) (Nád,500) (Réz,500) (Zaj,1500)
+    (Gitár,350) (Zongora,353) (Vokál,349) (Húr,350) (Nád,350) (Réz,352) (Zaj,994)
+};
+\addplot[fill=green!60!gray, draw=none] coordinates {
+    (Gitár,75) (Zongora,76) (Vokál,75) (Húr,75) (Nád,75) (Réz,76) (Zaj,213)
+};
+\addplot[fill=red!60!gray, draw=none] coordinates {
+    (Gitár,75) (Zongora,76) (Vokál,75) (Húr,75) (Nád,75) (Réz,76) (Zaj,213)
 };
 \addplot[fill=orange!75!gray, draw=none] coordinates {
-    (Gitár,250) (Zongora,250) (Vokál,250) (Húr,250) (Nád,250) (Réz,250) (Zaj,0)
+    (Gitár,350) (Zongora,350) (Vokál,350) (Húr,350) (Nád,350) (Réz,350) (Zaj,0)
 };
-\legend{Internetes tiszta minták, Internetes újrafelvett minták}
+\legend{Tiszta Train (70\%), Tiszta Val (15\%), Tiszta Test (15\%), Mikrofonos Train}
 \end{axis}
 \end{tikzpicture}
 \caption{A saját tiszta és az újrafelvételezett zajos minták megoszlása az adathalmazban}
@@ -172,106 +183,12 @@ Az újrafelvételi folyamat eredményeképpen az eredeti, tiszta minták mellé 
 \subsection{Végső adathalmaz összeállítása}
 \label{subsec:final_dataset}
 
-Egy konzisztens és pontos adathalmaz nagyban segíti a neurális hálózat tanulási folyamatát, ami jelentősen növeli az osztályozási pontosságot. Abban az esetben ugyanis, ha egy hangszerosztály lényegesen több mintával reprezentált, mint a többi, a hálózat hajlamos arra a hangszerkategóriára torzítani, amelyet gyakrabban látott a tanítás során. Ezért tartottam fontosnak biztosítani az osztályok egyenlő reprezentációját azáltal, hogy az egyes hangszerosztályok mintaszámát egységesen 1500~darab 1~másodperces mintára állítottam be. Tekintettel arra, hogy 7 hangszerosztályt határoztam meg, ez összesen 10\,500~mintát jelent a teljes hibrid adathalmazban.
 
-A hat hangszerosztály (gitár, zongora, ének, vonós, nád- és rézfúvós hangszerek) esetében nem használtam fel meglévő, nyilvános zenei adatbázisokat (mint pl. az IRMAS vagy az NSynth), hanem a teljes állományt magam állítottam össze. A kiinduló alapadathalmazt osztályonként 750~darab minta alkotja, amelyet két forrásból válogattam össze:
-\begin{enumerate}
-  \item \textbf{Saját tiszta minták (500 db/osztály)}: Különböző internetes forrásokból letöltött stúdió- és jó minőségű otthoni felvételek, amelyeket manuálisan vágtam ki és osztottam fel 1~másodperces szakaszokra.
-  \item \textbf{Mikrofonos újrafelvételek (250 db/osztály)}: A saját tiszta mintáim 50\%-ának (250~darab mintának) a laptop beépített mikrofonjával vagy mobiltelefonnal történő visszajátszása és rögzítése a valós környezet akusztikai torzításainak és zajainak modellezésére.
-\end{enumerate}
 
-Az így kapott 750~alapminta darabszámát adataugmentációs eljárásokkal dupláztam meg, létrehozva további 750~augmentált mintát osztályonként. Az augmentációs lánc során szobai zengetés szimulációt, pre-emphasis szűrést, környezeti zajkeverést és szoftklip torzítást alkalmazok -- ezek pontos paramétereit és képleteit a \ref{sec:augmentation}.~fejezet fejti ki részletesen. Így értem el a kívánt 1500~darabos mintaszámot a hangszerosztályoknál.
+Egy konzisztens és pontos adathalmaz nagyban segíti a neurális hálózat tanulási folyamatát. A megtervezett adatfolyam két fő könyvtárra támaszkodik: a \texttt{dataset\_clean} (amely a tiszta internetes mintákat tartalmazza, összesen 4428 darabot) és a \texttt{dataset\_mic} (amely a \texttt{train} halmaz esetében már tartalmazza az újrafelvett, mikrofonos mintákat is, így összesen 6492 darabot számol).
 
-A \texttt{noise} (zaj) osztály esetében nem volt szükség ilyen jellegű megosztásra és adataugmentációra: ide közvetlenül az ESC-50 környezeti zajadatbázisból válogattam be 1500~különböző mintát (például szél, eső, utcai zajok, egyéb háttérzajok), mivel ezek a felvételek a természetükből adódóan már eleve tartalmaznak mikrofon- és háttérzajokat.
+Amikor a jellemzőkinyerő script lefut, az adataugmentációs lépéseket (reverb, zajkeverés, torzítás) ,,on-the-fly'', azaz dinamikusan végzi el a memóriában. Ennek eredményeképpen a feldolgozott (kinyert) jellemzők száma a tanítási fázishoz kibővül: a tiszta adathalmazban 5927-re, míg a mikrofonos (augmented) adathalmazban 8335-re. Ez a megközelítés rendkívül stabil alapokat biztosít a hálózat számára.
 
-A minták fizikai rendezését és könyvtárstruktúrába szervezését a \texttt{hybrid\_}\allowbreak\texttt{dataset\_}\allowbreak\texttt{own\_}\allowbreak\texttt{final} mappába az \texttt{05\_}\allowbreak\texttt{assemble\_}\allowbreak\texttt{dataset.py} szkript segítségével végeztem el. A szkript a másolás megkezdése előtt véletlenszerűen összekeveri a forráskönyvtárakban található WAV fájlok listáját (\texttt{random.shuffle}), majd a kívánt darabszám eléréséig másolja a fájlokat az új, strukturált könyvtárakba. Ezzel garantálom a torzításmentes eloszlást. Minden fájlt egységesen mono csatornás, 16\,000~Hz-es mintavételezési frekvenciájú WAV formátumban tárolok el.
-
-Az adathalmaz felépítésének és az adatfolyamnak a folyamatdiagramját a \ref{fig:dataset_assembly_pipeline}.~ábra mutatja be.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-    node distance=1.2cm and 1.5cm,
-    block/.style={draw, rectangle, fill=blue!10, text width=4.2cm, align=center, rounded corners, minimum height=1.2cm, font=\small},
-    proc/.style={draw, rectangle, fill=orange!15, text width=4.2cm, align=center, rounded corners, minimum height=1.2cm, font=\small},
-    noise/.style={draw, rectangle, fill=gray!15, text width=4.2cm, align=center, rounded corners, minimum height=1.2cm, font=\small},
-    assem/.style={draw, rectangle, fill=yellow!25, text width=4.2cm, align=center, rounded corners, minimum height=1.2cm, font=\small},
-    output/.style={draw, rectangle, fill=green!15, text width=5.0cm, align=center, rounded corners, minimum height=1.4cm, font=\bfseries\small},
-    arrow/.style={-latex, thick}
-]
-
-% Nodes
-\node[block] (clean) {Saját internetes minták \\ \footnotesize (Stúdió- és szobaminőség) \\ \textbf{6 osztály $\times$ 500 minta}};
-\node[noise, right=of clean] (esc) {Környezeti zajminták \\ \footnotesize (ESC-50 adatbázis) \\ \textbf{1 osztály $\times$ 1500 minta}};
-
-\node[proc, below=of clean] (mic) {Mikrofonos újrafelvétel \\ \footnotesize (50\%-os visszajátszás + szinkronizált vágás) \\ \textbf{6 osztály $\times$ 250 minta}};
-
-\node[assem, below=of mic] (merge) {Alapadathalmaz összeállítás \\ \footnotesize (\texttt{05\_assemble\_}\allowbreak\texttt{dataset.py}) \\ \textbf{6 osztály $\times$ 750 minta}};
-
-\node[proc, below=of merge] (aug) {Adataugmentációs fázis \\ \footnotesize (zaj, reverb, clipping, szűrés) \\ \textbf{6 osztály $\times$ 1500 minta}};
-
-\node[output, below=of aug] (final) {Végső hibrid adathalmaz \\ \footnotesize (\texttt{hybrid\_dataset\_}\allowbreak\texttt{own\_final}) \\ \textbf{7 osztály $\times$ 1500 minta} \\ \textbf{Összesen: 10\,500 minta}};
-
-% Arrows
-\draw[arrow] (clean.south) -- (mic.north) node[midway, left, font=\footnotesize] {50\%};
-\draw[arrow] (clean.west) -- ++(-0.6,0) |- (merge.west) node[pos=0.25, left, font=\footnotesize] {500 tiszta minta};
-\draw[arrow] (mic.south) -- (merge.north) node[midway, right, font=\footnotesize] {250 újrafelvett minta};
-\draw[arrow] (merge.south) -- (aug.north) node[midway, right, font=\footnotesize] {Adataugmentáció (2$\times$)};
-\draw[arrow] (aug.south) -- (final.north) node[midway, right, font=\footnotesize] {9000 minta};
-\draw[arrow] (esc.south) |- (final.east) node[pos=0.7, above, font=\footnotesize] {1500 minta};
-
-\end{tikzpicture}
-\caption{A saját alapadatokból és adataugmentációból építkező hibrid adathalmaz folyamatdiagramja}
-\label{fig:dataset_assembly_pipeline}
-\end{figure}
-
-A létrejött végső adathalmaz belső összetételét (az internetes tiszta, az internetes újrafelvett, az internetes augmentált és a tovább augmentált extra zajos minták, valamint az ESC-50 zajminták pontos arányát) a \ref{fig:final_dataset_distribution}.~ábra szemlélteti.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-    ybar stacked,
-    bar width=16pt,
-    enlargelimits=0.15,
-    ylabel={Minták száma},
-    symbolic x coords={Gitár, Zongora, Vokál, Húr, Nád, Réz, Zaj},
-    xtick=data,
-    ymin=0,
-    ymax=1800,
-    width=0.9\textwidth,
-    height=6.5cm,
-    axis x line*=bottom,
-    axis y line*=left,
-    ymajorgrids=true,
-    grid style={dashed, gray!30},
-    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=2},
-    nodes near coords,
-    every node near coord/.append style={font=\footnotesize},
-]
-\addplot[fill=blue!60!gray, draw=none] coordinates {
-    (Gitár,500) (Zongora,500) (Vokál,500) (Húr,500) (Nád,500) (Réz,500) (Zaj,0)
-};
-\addplot[fill=orange!75!gray, draw=none] coordinates {
-    (Gitár,250) (Zongora,250) (Vokál,250) (Húr,250) (Nád,250) (Réz,250) (Zaj,0)
-};
-\addplot[fill=cyan!60!gray, draw=none] coordinates {
-    (Gitár,500) (Zongora,500) (Vokál,500) (Húr,500) (Nád,500) (Réz,500) (Zaj,0)
-};
-\addplot[fill=yellow!75!gray, draw=none] coordinates {
-    (Gitár,250) (Zongora,250) (Vokál,250) (Húr,250) (Nád,250) (Réz,250) (Zaj,0)
-};
-\addplot[fill=gray!50, draw=none] coordinates {
-    (Gitár,0) (Zongora,0) (Vokál,0) (Húr,0) (Nád,0) (Réz,0) (Zaj,1500)
-};
-\legend{Internetes tiszta, Internetes újrafelvett, Internetes augmentált, Extra zajos, ESC-50 zaj}
-\end{axis}
-\end{tikzpicture}
-\caption{A végső, kiegyensúlyozott hibrid adathalmaz belső összetétele kategóriák szerint}
-\label{fig:final_dataset_distribution}
-\end{figure}
-
-%% ═══════════════════════════════════════════════════════════════════════════
 \section{Jellemzőkinyerés tervezése}
 \label{sec:feature_extraction}
 
@@ -311,6 +228,10 @@ Az MFCC-t $n\_mfcc = 40$ együtthatóval számolom. Az MFCC a spektrális burkol
 $$\hat{x}_i = \frac{x_i - \mu_i}{\sigma_i + \epsilon}$$
 
 ahol $\mu_i$ és $\sigma_i$ az $i$-edik MFCC sáv átlaga és szórása, $\epsilon = 10^{-10}$.
+
+\subsection{Nyers hanghullám (Raw waveform)}
+
+A frekvenciatartománybeli jellemzők mellett közvetlenül kinyerjük és elmentjük a nyers, időtartománybeli audiojelet is. 1 másodperc esetén ez egy 16\,000 elemű, 1D-s tömb. Bár a hagyományos 2D CNN hálózatok számára ez az ábrázolás nem ideális, a mélyebb transzfer tanulási eljárások (például a YAMNet) pontosan ezt a nyers formátumot várják bemenetként.
 
 \subsection{A megfelelő jellemzőkinyerési eljárás kiválasztása}
 \label{subsec:feature_selection}
@@ -361,11 +282,12 @@ Ez biztosítja, hogy a CNN bemenete konzisztens értéktartományban maradjon.
 \subsection{Jellemzőkinyerés kimeneti állományai}
 \label{subsec:feature_outputs}
 
-A jellemzőkinyerési folyamat sikeres lefutása után a kinyert mátrixok és a hozzájuk tartozó osztálycímkék a projekt gyökerében lévő \texttt{processed\_data/} könyvtárba kerülnek elmentésre NumPy formátumban (\texttt{.npy} kiterjesztéssel). A generált fájlok a következők:
+A jellemzőkinyerési folyamat sikeres lefutása után a kinyert mátrixok és a hozzájuk tartozó osztálycímkék a projekt gyökerében lévő \texttt{processed\_data\_clean/} és \texttt{processed\_data\_mic/} könyvtárakba kerülnek elmentésre NumPy formátumban (\texttt{.npy} kiterjesztéssel), az alkalmazott forrásadathalmaztól függően. A generált fájlok már nem egyetlen nagy tömbben, hanem a szeparált kiértékelési halmazoknak megfelelően szétbontva (\texttt{train}, \texttt{val}, \texttt{test}) készülnek el. Például a \texttt{train} halmazhoz tartozó fájlok a következők:
 \begin{itemize}
-  \item \textbf{Log-Mel spektrogram:} \texttt{X\_log\_mel\_full.npy} (a jellemzőmátrixokat tartalmazó tömb) és \texttt{y\_log\_mel\_labels.npy} (a hangszerosztályok sorszámait tartalmazó címketömb),
-  \item \textbf{STFT spektrogram:} \texttt{X\_stft\_full.npy} és \texttt{y\_stft\_labels.npy},
-  \item \textbf{MFCC együtthatók:} \texttt{X\_mfcc\_full.npy} és \texttt{y\_mfcc\_labels.npy}.
+  \item \textbf{Log-Mel spektrogram:} \texttt{X\_log\_mel\_train.npy} (a jellemzőmátrixokat tartalmazó tömb) és \texttt{y\_labels\_train.npy} (a hangszerosztályok sorszámait tartalmazó címketömb),
+  \item \textbf{STFT spektrogram:} \texttt{X\_stft\_train.npy},
+  \item \textbf{MFCC együtthatók:} \texttt{X\_mfcc\_train.npy},
+  \item \textbf{Nyers hanghullám (csak a mic adathalmaznál):} \texttt{X\_raw\_train.npy}, amely az olyan transzfer tanulási architektúrák, mint a YAMNet, közvetlen bemeneteként szolgál.
 \end{itemize}
 A normalizált és binárisan tömörített fájlformátum biztosítja, hogy a tanítási fázisban a minták betöltése rendkívül gyorsan, közvetlenül a memóriába (RAM) történhessen meg, elkerülve a felesleges lemezműveleteket.
 
@@ -373,7 +295,7 @@ A normalizált és binárisan tömörített fájlformátum biztosítja, hogy a t
 \section{Adataugmentáció tervezése}
 \label{sec:augmentation}
 
-A modell valós környezetben való robusztusságának javítása érdekében minden hangszermintát (a noise osztályt kivéve) egy augmentált változattal egészítek ki. Az augmentáció a fogyasztói mikrofonos felvétel körülményeit szimulálja, ezért a belső elnevezése \texttt{apply\_macbook\_\allowbreak augment}. Az alkalmazott adataugmentációs lánc felépítését és a lépések sorrendjét a \ref{fig:augmentation_chain}.~ábrán mutatom be, míg az augmentáció hatását a spektrális jellemzőkre (egy gitárminta példáján keresztül) a \ref{fig:original_vs_augmented}.~ábra szemlélteti.
+A modell valós idejű kiértékelésre való felkészítése érdekében a tanító (train) halmaz minden tiszta hangszermintáját (a noise osztályt és az eleve mikrofonnal rögzített \texttt{\_mic\_} mintákat kivéve) egy augmentált változattal egészítek ki. Az augmentáció a fogyasztói mikrofonos felvétel körülményeit szimulálja, ezért a belső elnevezése \texttt{apply\_macbook\_\allowbreak augment}. Az alkalmazott adataugmentációs lánc felépítését és a lépések sorrendjét a \ref{fig:augmentation_chain}.~ábrán mutatom be, míg az augmentáció hatását a spektrális jellemzőkre (egy gitárminta példáján keresztül) a \ref{fig:original_vs_augmented}.~ábra szemlélteti.
 
 Az augmentációs lánc a következő lépésekből áll:
 
@@ -454,12 +376,12 @@ $$y_{norm} = \frac{y}{\max(|y|)} \cdot 0{,}9$$
   \label{fig:original_vs_augmented}
 \end{figure}
 
-Az augmentáció eredményeként az alapadathalmaz mérete megduplázódik a 6 hangszerosztály esetén (a \texttt{noise} osztályt nem augmentálom), így alakítva ki a végső adathalmazt: $6 \times 750 \times 2 + 1500 = 10\,500$ minta.
+Az augmentáció eredményeként a 6 hangszerosztály \textbf{tanító (train) halmazának tiszta mintái} kiegészülnek egy-egy torzított változattal (a \texttt{noise} és a már eleve mikrofonnal rögzített \texttt{\_mic\_} mintákat a script logikája automatikusan kihagyja).
 
-Az augmentációs eljárás helyességének és minőségének manuális ellenőrzése, illetve összehasonlítása céljából a rendszer minden hangszerosztályból kiment néhány bemutató mintát (az eredeti és az augmentált változat párosait) az \texttt{augmented\_samples/} könyvtárba. Ez a gyakorlatban lehetővé teszi a fejlesztő számára, hogy mind füllel (hallás útján), mind vizuálisan meggyőződjön arról, hogy az alkalmazott szimulációs torzítások (például visszhang és zajkeverés) valósághűek, és nem teszik felismerhetetlenné a hangszerek alapvető karakterét.
+Az augmentációs eljárás helyességének és minőségének manuális ellenőrzése, illetve összehasonlítása céljából a rendszer minden hangszerosztályból kiment néhány bemutató mintát (az eredeti és az augmentált változat párosait) az \texttt{augmented\_preview/} könyvtárba. Ez a gyakorlatban lehetővé teszi a fejlesztő számára, hogy mind füllel (hallás útján), mind vizuálisan meggyőződjön arról, hogy az alkalmazott szimulációs torzítások (például visszhang és zajkeverés) valósághűek, és nem teszik felismerhetetlenné a hangszerek alapvető karakterét.
 
 %% ═══════════════════════════════════════════════════════════════════════════
-\section{A 2D CNN hálózat architektúrájának tervezése}
+\section{Modell architektúrák tervezése}
 \label{sec:cnn_architecture}
 
 A tervezett hangszerfelismerő rendszer magját egy mély konvolúciós neurális hálózat (CNN) alkotja, amely a Log-Mel spektrogramok 2D-s vizuális mintázatait tanulja meg osztályozni. Ebben a fejezetben részletezem a hálózat felépítését, a rétegek sorrendjét és paramétereit, valamint a hálózat betanításához használt konfigurációkat. A tervezett hálózati rétegek specifikációit a \ref{tab:cnn_standard}.~táblázat foglalja össze, a rétegek közötti adatfolyamot és az architektúra grafikus felépítését pedig a \ref{fig:cnn_architecture}.~ábra ábrázolja.
@@ -467,40 +389,36 @@ A tervezett hangszerfelismerő rendszer magját egy mély konvolúciós neuráli
 \subsection{A hálózati architektúra részletei}
 \label{subsec:cnn_details}
 
-A rendszer magját egy háromblokkos konvolúciós hálózat (2D CNN) alkotja. Minden blokk a következő rétegekből áll: 2D konvolúció $\rightarrow$ Batch Normalization $\rightarrow$ Max Pooling $\rightarrow$ Dropout. A hálózat bemenete a kiválasztott, normalizált Log-Mel spektrogram ($64 \times 32 \times 1$).
+A rendszer magját egy VGG-stílusú, háromblokkos konvolúciós hálózat (2D CNN) alkotja, kiegészítve egy bemeneti SpecAugment réteggel. A SpecAugment menet közben véletlenszerű idő- és frekvenciamaszkolással takar ki részleteket a spektrogramból, így kényszerítve a hálózatot az átfogóbb mintázatok megtanulására és a túlilleszkedés (overfitting) elkerülésére. A konvolúciós blokkok két egymást követő 2D konvolúcióból, Batch Normalization-ből, ReLU aktivációból, majd végül Max Poolingból és Dropoutból (30\%) állnak. A hálózat bemenete a kiválasztott, normalizált Log-Mel spektrogram ($64 \times 32 \times 1$), a kimenetnél pedig a hagyományos Flatten helyett térbeli átlagolást (GlobalAveragePooling2D) alkalmazunk a paraméterszám drasztikus csökkentése érdekében.
 
 \begin{table}[H]
 \centering
 \caption{A tervezett 2D CNN architektúra rétegei (Log-Mel bemenet: $64 \times 32 \times 1$)}
 \label{tab:cnn_standard}
+\resizebox{\textwidth}{!}{
 \begin{tabular}{llll}
 \toprule
 \textbf{Réteg} & \textbf{Szűrők / Neuronok} & \textbf{Kimenet} & \textbf{Paraméterek} \\
 \midrule
-Conv2D & 32 szűrő, $3 \times 3$, ReLU, same & $64 \times 32 \times 32$ & 320 \\
-BatchNorm & -- & $64 \times 32 \times 32$ & 128 \\
-MaxPool2D & $2 \times 2$ & $32 \times 16 \times 32$ & 0 \\
-Dropout & 0{,}25 & $32 \times 16 \times 32$ & 0 \\
+SpecAugment & max 15 frekvencia, 8 idő maszk & $64 \times 32 \times 1$ & 0 \\
 \midrule
-Conv2D & 64 szűrő, $3 \times 3$, ReLU, same & $32 \times 16 \times 64$ & 18\,496 \\
-BatchNorm & -- & $32 \times 16 \times 64$ & 256 \\
-MaxPool2D & $2 \times 2$ & $16 \times 8 \times 64$ & 0 \\
-Dropout & 0{,}25 & $16 \times 8 \times 64$ & 0 \\
+2$\times$ Conv2D+BN+ReLU & 32 szűrő, $3 \times 3$, same & $64 \times 32 \times 32$ & $320 + 128 + 9\,248 + 128$ \\
+MaxPool2D + Dropout & $2 \times 2$, dropout: 0{,}3 & $32 \times 16 \times 32$ & 0 \\
 \midrule
-Conv2D & 128 szűrő, $3 \times 3$, ReLU, same & $16 \times 8 \times 128$ & 73\,856 \\
-BatchNorm & -- & $16 \times 8 \times 128$ & 512 \\
-MaxPool2D & $2 \times 2$ & $8 \times 4 \times 128$ & 0 \\
-Dropout & 0{,}25 & $8 \times 4 \times 128$ & 0 \\
+2$\times$ Conv2D+BN+ReLU & 64 szűrő, $3 \times 3$, same & $32 \times 16 \times 64$ & $18\,496 + 256 + 36\,928 + 256$ \\
+MaxPool2D + Dropout & $2 \times 2$, dropout: 0{,}3 & $16 \times 8 \times 64$ & 0 \\
 \midrule
-Flatten & -- & 4096 & 0 \\
-Dense & 128, ReLU & 128 & 524\,416 \\
-BatchNorm & -- & 128 & 512 \\
+2$\times$ Conv2D+BN+ReLU & 128 szűrő, $3 \times 3$, same & $16 \times 8 \times 128$ & $73\,856 + 512 + 147\,584 + 512$ \\
+GlobalAvgPool2D + Drop & dropout: 0{,}5 & 128 & 0 \\
+\midrule
+Dense + BN + ReLU & 128 neuron & 128 & $16\,512 + 512$ \\
 Dropout & 0{,}5 & 128 & 0 \\
 Dense & 7, Softmax & 7 & 903 \\
 \midrule
-\textbf{Összesen} & & & $\sim$619\,399 \\
+\textbf{Összesen} & & & $\sim$306\,150 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \begin{figure}[H]
@@ -515,15 +433,15 @@ Dense & 7, Softmax & 7 & 903 \\
     arrow/.style={thick,->,>=stealth}
 ]
   % Nodes
-  \node (input) [input] {Bemenet \\ (Log-Mel: $64 \times 32 \times 1$)};
+  \node (input) [input] {Bemenet \& SpecAugment \\ (Log-Mel: $64 \times 32 \times 1$)};
   
-  \node (block1) [block, below=of input] {\textbf{1. Konvolúciós blokk} \\ Conv2D (32 szűrő, $3\times3$, ReLU) \\ BatchNorm $\rightarrow$ MaxPool ($2\times2$) \\ Dropout (0,25) \\ \textit{Kimenet: $32 \times 16 \times 32$}};
+  \node (block1) [block, below=of input] {\textbf{1. Konvolúciós blokk} \\ 2x Conv2D (32 szűrő, $3\times3$, ReLU, BN) \\ MaxPool ($2\times2$) $\rightarrow$ Dropout (0,30) \\ \textit{Kimenet: $32 \times 16 \times 32$}};
   
-  \node (block2) [block, below=of block1] {\textbf{2. Konvolúciós blokk} \\ Conv2D (64 szűrő, $3\times3$, ReLU) \\ BatchNorm $\rightarrow$ MaxPool ($2\times2$) \\ Dropout (0,25) \\ \textit{Kimenet: $16 \times 8 \times 64$}};
+  \node (block2) [block, below=of block1] {\textbf{2. Konvolúciós blokk} \\ 2x Conv2D (64 szűrő, $3\times3$, ReLU, BN) \\ MaxPool ($2\times2$) $\rightarrow$ Dropout (0,30) \\ \textit{Kimenet: $16 \times 8 \times 64$}};
   
-  \node (block3) [block, below=of block2] {\textbf{3. Konvolúciós blokk} \\ Conv2D (128 szűrő, $3\times3$, ReLU) \\ BatchNorm $\rightarrow$ MaxPool ($2\times2$) \\ Dropout (0,25) \\ \textit{Kimenet: $8 \times 4 \times 128$}};
+  \node (block3) [block, below=of block2] {\textbf{3. Konvolúciós blokk} \\ 2x Conv2D (128 szűrő, $3\times3$, ReLU, BN) \\ GlobalAveragePooling2D $\rightarrow$ Dropout (0,50) \\ \textit{Kimenet: 128 dimenziós vektor}};
   
-  \node (flatten) [dense, below=of block3] {\textbf{Közös fully connected rétegek} \\ Flatten (4096 dimenzió) \\ Dense (128 neuron, ReLU) \\ BatchNorm $\rightarrow$ Dropout (0,5)};
+  \node (flatten) [dense, below=of block3] {\textbf{Közös fully connected rétegek} \\ Dense (128 neuron, ReLU) \\ BatchNorm $\rightarrow$ Dropout (0,50)};
   
   \node (output) [output, below=of flatten] {\textbf{Kimeneti réteg} \\ Dense (7 neuron, Softmax) \\ \textit{Hangszerosztály valószínűségek}};
   
@@ -539,7 +457,30 @@ Dense & 7, Softmax & 7 & 903 \\
 \end{figure}
 
 
+
+\subsection{YAMNet Transfer Learning architektúra}
+\label{subsec:yamnet_architecture}
+
+Bár a saját fejlesztésű 2D CNN hálózat stabil teljesítményt nyújt (78\%-os baseline pontosság), a valós környezet sokrétű zajai és a felvételi torzítások kihívásai miatt szükség volt egy még stabilabb, jobban általánosító modellre. Ennek eléréséhez a Google által fejlesztett és a TensorFlow Hub-on publikált YAMNet modellt választottam ki. 
+
+A YAMNet egy mély, MobileNetV1 alapú architektúra, amelyet a hatalmas AudioSet adatbázison tanítottak be, így kiváló akusztikai reprezentációs képességekkel rendelkezik. A YAMNet bemenete közvetlenül a normalizált nyers hanghullám ($16\,000$ elemű vektor).
+
+A rendszeremben a YAMNet modellt nem a nulláról tanítom újra, hanem jellemzőkinyerőként (feature extractor) használom. A folyamat során az 1 másodperces audiojel végighalad a YAMNet befagyasztott konvolúciós rétegein, aminek az eredménye egy 1024 dimenziós sűrű reprezentáció (beágyazás, azaz \textit{embedding}). 
+
+Ezt a mély beágyazást egy saját tervezésű, teljesen összekapcsolt (fully connected) osztályozó hálózatba vezetem be. Az általam tervezett osztályozó felépítése a következő:
+\begin{enumerate}
+  \item \textbf{Bemenet:} 1024 dimenziós YAMNet embedding
+  \item \textbf{Rejtett réteg 1:} Sűrű réteg (Dense), 256 neuron, ReLU aktiváció
+  \item \textbf{Normalizáció 1:} Batch Normalization és 40\% Dropout
+  \item \textbf{Rejtett réteg 2:} Sűrű réteg (Dense), 128 neuron, ReLU aktiváció
+  \item \textbf{Normalizáció 2:} Batch Normalization és 40\% Dropout
+  \item \textbf{Kimeneti réteg:} Sűrű réteg (Dense), 7 neuron, Softmax aktiváció (hangszerosztályok valószínűségei)
+\end{enumerate}
+
+Ez az architektúra nemcsak, hogy drasztikus pontosságnövekedést (akár 90\% körüli F1-score) és sokkal stabilabb működést eredményezett a saját CNN baseline-hoz képest, de a tanítási időt is jelentősen lecsökkentette.
+
 \subsection{Tanítási konfiguráció}
+
 
 A 2D CNN modell tanítása során alkalmazott konfigurációt és hiperparamétereket úgy válogattam meg, hogy biztosítsák a modell stabil konvergenciáját és elkerüljék a túlilleszkedést (overfitting), miközben hatékonyan kihasználják a rendelkezésre álló számítási erőforrásokat. A modell optimalizálását, a veszteségfüggvényt, az adathalmaz felosztását és a tanulási folyamatot szabályozó callback mechanizmusokat a \ref{tab:training_config}.~táblázat foglalja össze részletesen.
 
@@ -551,13 +492,13 @@ A 2D CNN modell tanítása során alkalmazott konfigurációt és hiperparaméte
 \toprule
 \textbf{Paraméter / Beállítás} & \textbf{Érték / Részletek} \\
 \midrule
-Optimalizáló & Adam (alapértelmezett tanulási ráta: $10^{-3}$) \\
-Veszteségfüggvény & Sparse Categorical Crossentropy \\
-Tanító/tesztelő felosztás & 80\% / 20\% (rétegzett / stratified felosztásban) \\
+Optimalizáló & AdamW (tanulási ráta: $10^{-3}$, weight decay: $10^{-4}$) \\
+Veszteségfüggvény & Categorical Crossentropy (Label Smoothing: 0,1 alkalmazásával) \\
+Tanító/validációs/teszt & 70\% / 15\% / 15\% (rétegzett felosztásban) \\
 Batch méret & 32 \\
-Maximális epochszám & 100 \\
-Early Stopping & \texttt{val\_loss} monitorozás, patience = 7, a legjobb súlyok visszaállításával (\texttt{restore\_best\_weights=True}) \\
-ReduceLROnPlateau & \texttt{val\_loss} monitorozás, patience = 3, faktor = 0{,}5, minimális tanulási ráta: $10^{-6}$ \\
+Maximális epochszám & 150 \\
+Early Stopping & \texttt{val\_loss} monitorozás, patience = 10, legjobb súlyok visszaállítása (\texttt{restore\_best\_weights=True}) \\
+ReduceLROnPlateau & \texttt{val\_loss} monitorozás, patience = 4, faktor = 0{,}5, minimális tanulási ráta: $10^{-6}$ \\
 ModelCheckpoint & \texttt{val\_accuracy} alapján a legjobb modell mentése \texttt{.keras} formátumban \\
 \bottomrule
 \end{tabular}
@@ -565,9 +506,9 @@ ModelCheckpoint & \texttt{val\_accuracy} alapján a legjobb modell mentése \tex
 
 A táblázatban szereplő beállítások elméleti háttere és működési célja a következő:
 \begin{itemize}
-  \item \textbf{Adam optimalizáló:} Adaptív módon szabályozza a tanulási rátát minden egyes paraméternél, ami gyorsabb konvergenciát és jobb stabilitást eredményez a hagyományos sztochasztikus gradiens leereszkedéshez (SGD) képest.
-  \item \textbf{Early Stopping callback:} Megakadályozza a túlilleszkedést (overfitting). Ha a validációs veszteség (\texttt{val\_loss}) 7 egymást követő epochoz tartozóan már nem csökken, a tanítási folyamat automatikusan leáll, és visszaállítja a modellt a legjobb súlyokat tartalmazó állapotba.
-  \item \textbf{ReduceLROnPlateau callback:} Lehetővé teszi a tanulási ráta menet közbeni finomhangolását. Ha a modell elakad egy lokális minimum közelében (azaz a \texttt{val\_loss} nem csökken 3 epoch óta), a tanulási sebességet lefelezi ($0{,}5$-ös faktor), így segítve a precízebb konvergenciát.
+  \item \textbf{AdamW optimalizáló és Címkesimítás (Label Smoothing):} A hagyományos Adam helyett az AdamW optimalizálót (súlycsökkenés / weight decay bevonásával), a veszteségfüggvénynél pedig 0,1-es címkesimítást alkalmaztam. Ez a két technika együttesen erősen bünteti a modell túlzott magabiztosságát (overconfidence), ezáltal nagymértékben megelőzve a túlilleszkedést a zajos hangmintáknál.
+  \item \textbf{Early Stopping callback:} Megakadályozza az iterációk felesleges futását. Ha a validációs veszteség (\texttt{val\_loss}) 10 egymást követő epochoz tartozóan már nem csökken, a tanítási folyamat automatikusan leáll, és visszaállítja a modellt a legjobb állapotba.
+  \item \textbf{ReduceLROnPlateau callback:} Lehetővé teszi a tanulási ráta menet közbeni finomhangolását. Ha a modell elakad egy lokális minimum közelében (azaz a \texttt{val\_loss} nem csökken 4 epoch óta), a tanulási sebességet lefelezi ($0{,}5$-ös faktor), így segítve a precízebb konvergenciát.
 \end{itemize}
 
 A tanítás a Google Colab felhőszolgáltatás GPU-ján történik, az adatokat és a mentett modelleket a Google Drive-on tároljuk és onnan töltjük vissza a projektbe.
@@ -597,54 +538,44 @@ A valós idejű hangfelvétel és a jelfeldolgozási lépések szétválasztás�
 \begin{itemize}
   \item \textbf{Mintavételi frekvencia ($f_s$):} 16\,000~Hz,
   \item \textbf{Csatornaszám:} 1 (monó),
-  \item \textbf{Lépésköz (Step duration):} $0,5$ másodperc (8000 minta).
+  \item \textbf{Lépésköz (Step duration):} $0,25$ másodperc (4000 minta).
 \end{itemize}
 
-A beérkező audioadatok kezelése egy szálbiztos FIFO soron (\texttt{queue.Queue}) keresztül történik. Az audio callback függvény kizárólag a hardver pufferéből érkező 8000 mintás csomagokat helyezi el a sorban, majd azonnal visszatér. Ez garantálja, hogy a CPU-igényes neurális hálózati következtetés és a GUI-frissítés nem blokkolja a hangkártya illesztőprogramját, elkerülve az audió puffer alulcsordulását (buffer underflow).
+A beérkező audioadatok kezelése egy szálbiztos FIFO soron (\texttt{queue.Queue}) keresztül történik. Az audio callback függvény kizárólag a hardver pufferéből érkező 4000 mintás csomagokat helyezi el a sorban, majd azonnal visszatér. Ez garantálja, hogy a CPU-igényes neurális hálózati következtetés és a terminálfrissítés nem blokkolja a hangkártya illesztőprogramját, elkerülve az audió puffer alulcsordulását (buffer underflow).
 
-A fő feldolgozó szál folyamatosan olvassa a sorból a 0,5 másodperces blokkokat. A predikció alapját egy folyamatos, $1,0$ másodperces (16\,000 minta) csúszóablak képezi. A 50\%-os átfedés (overlap) eléréséhez egy körpuffer-szerű logikát alkalmazok: minden új 0,5 másodperces blokk beérkezésekor a puffer tartalmát balra csúsztatom 8000 mintával, és az új adatot a puffer végére írom (roll művelet). Ezáltal a rendszer másodpercenként kétszer hajt végre predikciót az utolsó 1 másodpercnyi hanganyagra vonatkozóan.
+A fő feldolgozó szál folyamatosan olvassa a sorból a 0,25 másodperces blokkokat. A predikció alapját egy folyamatos, $1,0$ másodperces (16\,000 minta) csúszóablak képezi. A 75\%-os átfedés (overlap) eléréséhez egy körpuffer-szerű logikát alkalmazok: minden új 0,25 másodperces blokk beérkezésekor a puffer tartalmát balra csúsztatom 4000 mintával, és az új adatot a puffer végére írom (roll művelet). Ezáltal a rendszer másodpercenként négyszer hajt végre predikciót az utolsó 1 másodpercnyi hanganyagra vonatkozóan.
 
 \subsection{Jellemzőkinyerés és normalizálás}
 
-Minden predikciós ciklusban az 1 másodperces pufferből kinyerem a Log-Mel spektrogram jellemzőket. A kinyert spektrális mátrix dimenziója $64 \times 32$, ami megegyezik a tanítás során használt bemenettel.
+A felismerő rendszer alapvetően kétféle hálózattal tud elindulni. Amennyiben a saját fejlesztésű 2D CNN hálózatot használjuk, minden predikciós ciklusban az 1 másodperces pufferből kinyerem a Log-Mel spektrogram jellemzőket. A kinyert spektrális mátrix dimenziója $128 \times 63$, ami megegyezik a tanítás során használt bemenettel.
 
-A neurális hálózat bemeneti rétege $[0, 1]$ intervallumba skálázott adatokat vár. A valós idejű jellemzőkre a tanítási fázissal azonos min-max normalizálást alkalmazok decibel alapú korlátokkal:
-$$X_{\text{norm}} = \frac{X_{\text{dB}} - \text{min\_dB}}{\text{max\_dB} - \text{min\_dB}}$$
-ahol $\text{min\_dB} = -80,0$~dB és $\text{max\_dB} = 0,0$~dB. A kapott értékeket a $[0, 1]$ intervallumra vágom le (\texttt{clip} művelet), majd a tenzort átformázom a $1 \times 64 \times 32 \times 1$ bemeneti formára (batch és csatorna dimenziók hozzáadásával), és átadom a betöltött 2D CNN modellnek.
+A 2D CNN bemeneti rétege $[0, 1]$ intervallumba skálázott adatokat vár. A valós idejű jellemzőkre a tanítási fázissal azonos normalizálást alkalmazok decibel alapú korlátokkal:
+$$X_{\text{norm}} = \frac{X_{\text{dB}} + 80,0}{80,0}$$
+A kapott értékeket a $[0, 1]$ intervallumra vágom le (\texttt{clip} művelet), majd a tenzort átformázom a $1 \times 128 \times 63 \times 1$ bemeneti formára (batch és csatorna dimenziók hozzáadásával).
 
-\subsection{Zajkapu és csenddetektálás}
+A fejlettebb, YAMNet alapú felismerő modul esetében az eljárás jóval egyszerűbb: a teljes, 16\,000 mintás nyers audiopuffert közvetlenül átalakítjuk TensorFlow tenzorrá, amiből a lefagyasztott YAMNet elkészíti az 1024-es beágyazást (embedding). Ezt az embedding vektort kapja meg a saját betanított osztályozónk.
 
-A valós idejű működés során fontos szempont, hogy ha nincs zenei bemenet (például csend van a szobában), a rendszer ne kíséreljen meg hangszerosztályt predikálni a mikrofon alapzaja alapján, elkerülve a téves pozitív detektálásokat. Ennek érdekében a jelfeldolgozási lánc elejére egy szoftveres zajkaput (Noise Gate) terveztem.
+\subsection{Zaj-alapú küszöbölés és Predikciós stabilizáció}
 
-A fő feldolgozó szál a jellemzőkinyerés megkezdése előtt kiszámítja a csúszóablakben lévő 1 másodperces audiojel $x(n)$ RMS (Root Mean Square) energiáját:
-$$E_{\text{RMS}} = \sqrt{\frac{1}{N} \sum_{n=0}^{N-1} x(n)^2}$$
-ahol $N = 16\,000$ a mintaszám. A rendszer ezt az értéket összehasonlítja egy előre meghatározott zajkapu-küszöbértékkel ($\theta_{\text{gate}}$):
-\begin{itemize}
-  \item Ha $E_{\text{RMS}} < \theta_{\text{gate}}$ (ahol $\theta_{\text{gate}} = 0,005$), a bemenetet csendnek vagy háttérzajnak tekintjük. A rendszer ekkor kikerüli (bypass) a jellemzőkinyerési és a neurális hálózati következtetési fázist, és azonnal a \texttt{Zaj/Csend} osztályt jeleníti meg a kimeneten $100\%$ konfidenciával.
-  \item Ha $E_{\text{RMS}} \geq \theta_{\text{gate}}$, a jelfeldolgozási lánc normál módon folytatódik a Log-Mel jellemzők kinyerésével és a 2D CNN osztályozó futtatásával.
-\end{itemize}
-
-Ez a megoldás nemcsak a téves detektálásokat akadályozza meg csendes környezetben, hanem jelentősen csökkenti a CPU terhelését is azáltal, hogy inaktív időszakokban mentesíti a hardvert a neurális hálózat futtatásának igényétől.
-
-\subsection{Predikciós döntési logika és hiszterézis}
-
-A hangszerosztályok pillanatnyi valószínűségei a zenefájlokban és az élő játékban tapasztalható dinamikus változások (tranziensek, vibrato, környezeti zajok) miatt gyorsan ingadozhatnak. Ha közvetlenül az aktuális predikció legnagyobb valószínűségű osztályát jelenítenénk meg, a kijelzőn zavaró, gyors váltások (,,villogás'') jelennének meg. Ennek kiszűrésére egy kétszintű stabilizációs logikát terveztem:
+A hangszerosztályok pillanatnyi valószínűségei a zenefájlokban és az élő játékban tapasztalható dinamikus változások (tranziensek, vibrato, környezeti zajok) miatt gyorsan ingadozhatnak. Ha közvetlenül az aktuális predikció legnagyobb valószínűségű osztályát jelenítenénk meg, a terminálon zavaró, gyors váltások (,,villogás'') jelennének meg. Ennek kiszűrésére egy összetett stabilizációs logikát terveztem:
 
 \begin{enumerate}
-  \item \textbf{Temporális mozgóátlag simítás:} A modell kimeneti valószínűség-vektorait egy $W = 4$ elemű FIFO sorban tárolom (amely az utolsó 2 másodperc predikciós történetét fedi le). A döntéshozatal a simított valószínűség-vektor alapján történik:
+  \item \textbf{Temporális mozgóátlag simítás:} A modell kimeneti valószínűség-vektorait egy $W = 6$ elemű FIFO sorban tárolom (amely a 250 ms-os lépésköz miatt az utolsó $1,5$ másodperc predikciós történetét fedi le). A döntéshozatal a simított valószínűség-vektor alapján történik:
   $$\bar{p}_c^{(t)} = \frac{1}{W} \sum_{i=0}^{W-1} p_c^{(t-i)}$$
-  ahol $p_c^{(t-i)}$ a modell által a $c$ osztályra becsült valószínűség a $(t-i)$-edik időlépésben.
   
   \item \textbf{Hiszterézis mechanizmus:} Annak érdekében, hogy megakadályozzuk a két közeli valószínűségű osztály közötti ugrálást (chattering), egy $H = 0,05$ ($5\%$) értékű hiszterézis bónuszt adunk a jelenleg aktív (kijelzett) osztály $C^{(t-1)}$ simított valószínűségéhez a maximumkeresés előtt:
   $$a_c^{(t)} = \bar{p}_c^{(t)} + H \cdot \mathbb{I}(c = C^{(t-1)})$$
-  ahol $\mathbb{I}$ az indikátorfüggvény. A jelölt új osztályt a módosított vektor maximumhelye adja meg:
-  $$c_{\text{cand}} = \arg\max_c a_c^{(t)}$$
+  ahol $\mathbb{I}$ az indikátorfüggvény. A jelölt új osztályt a módosított vektor maximumhelye adja meg.
   
-  \item \textbf{Konfidencia-küszöb:} A kijelzett hangszercsere csak akkor történik meg, ha a jelölt új osztály simított valószínűsége (bónusz nélkül) eléri a $\tau = 0,3$ ($30\%$) minimális konfidencia-küszöbértéket:
-  $$C^{(t)} = \begin{cases} c_{\text{cand}}, & \text{ha } c_{\text{cand}} \neq C^{(t-1)} \text{ és } \bar{p}_{c_{\text{cand}}}^{(t)} \geq \tau \\ C^{(t-1)}, & \text{egyébként} \end{cases}$$
+  \item \textbf{Osztály-specifikus konfidencia-küszöb:} Nem alkalmazok fix hardveres RMS alapú zajkaput, mivel a modell kiválóan megtanulta a \texttt{noise} (zaj/csend) osztály felismerését. Helyette a predikció során osztály-specifikus küszöbértékeket ellenőrzök, amelyek értékeit az alábbi empirikus megfontolások alapján határoztam meg:
+  \begin{itemize}
+      \item \textbf{Hangszerek küszöbe ($45\%$):} Mivel 7 kategóriánk van, egy teljesen véletlenszerű döntés $\sim$14\%-os valószínűséget jelentene. A 45\%-os küszöb megköveteli, hogy a modell határozottan dominánsnak ítélje meg a felismert hangszert. Ezzel elkerülhetők a vakriasztások (false positives), amik a zajosabb tranziensek vagy műfajok közötti átmenetek során 20-30\%-os tüskeként jelentkezhetnének.
+      \item \textbf{Zaj/Csend küszöbe ($20\%$):} Amikor a hangszeres játék befejeződik, a mikrofonba csak a szoba alapzaja jut. Ilyenkor a neurális hálózat gyakran bizonytalanabb, és a kimeneti valószínűséget szétkeni a többi 6 osztály között, így a \texttt{noise} kimenet ritkán éri el a 45\%-ot. Ha a zajhoz is magas küszöböt követelnénk, a kijelző "beleragadna" az utolsó hangszer állapotába. A mindössze 20\%-os (de még mindig az egyenletes eloszlásnál magasabb) küszöb biztosítja, hogy a rendszer agresszívan és gyorsan visszaálljon az alapállapotra (csendre), amint a hangszer elhalkul.
+  \end{itemize}
+  A kijelzett hangszercsere tehát csak akkor történik meg, ha a vizsgált osztály simított valószínűsége átlépi a rá vonatkozó küszöböt. Ez a szoftveres megoldás feleslegessé teszi a jelszint alapú RMS számítást.
 \end{enumerate}
 
-Ez a tervezési megoldás rendkívül stabil vizuális visszajelzést biztosít a felhasználói felületen, miközben az átfedéseknek köszönhetően a fizikai reakcióidő legfeljebb 0,5--1,0 másodperc marad. A valós idejű felismerési folyamat egyes lépéseit, a bemeneti audio stream rögzítésétől a konvolúciós hálózat predikcióján és a hiszterézises simításon át a kijelzésig a \ref{fig:realtime_pipeline}.~ábra foglalja össze vizuálisan.
+Ez a tervezési megoldás rendkívül stabil vizuális visszajelzést biztosít a felhasználói felületen, miközben a gyorsabb, 0,25 másodperces frissítési ütemnek köszönhetően a rendszer rendkívül reszponzív marad. A valós idejű felismerési folyamat egyes lépéseit a \ref{fig:realtime_pipeline}.~ábra foglalja össze vizuálisan.
 
 \begin{figure}[H]
 \centering
@@ -659,11 +590,11 @@ Ez a tervezési megoldás rendkívül stabil vizuális visszajelzést biztosít 
   % Nodes
   \node (mic) [flowio] {Mikrofon \\ (élő audio stream)};
   \node (seg) [flowblock, right=of mic] {Csúszóablak \\ (1 másodperc, 16\,000 minta)};
-  \node (mel) [flowproc, right=of seg] {Log-Mel jellemzők \\ (64 $\times$ 32 mátrix)};
+  \node (mel) [flowproc, right=of seg] {Log-Mel jellemzők \\ (128 $\times$ 63 mátrix)};
   \node (norm) [flowproc, right=of mel] {Normalizálás \\ ($[0,1]$ skálázás)};
   
   \node (cnn) [flowblock, below=of norm] {2D CNN predikció \\ (osztály valószínűségek)};
-  \node (avg) [flowproc, left=of cnn] {Mozgóátlag simítás \\ ($W=4$ puffer, hiszterézis)};
+  \node (avg) [flowproc, left=of cnn] {Mozgóátlag simítás \\ ($W=6$ puffer, hiszterézis)};
   \node (disp) [flowout, left=of avg] {Kijelzés \\ (hangszer + konfidencia)};
   
   % Arrows
@@ -678,7 +609,6 @@ Ez a tervezési megoldás rendkívül stabil vizuális visszajelzést biztosít 
 \label{fig:realtime_pipeline}
 \end{figure}
 
-\clearpage
 %% ═══════════════════════════════════════════════════════════════════════════
 \section{A feldolgozási folyamat összefoglaló áttekintése}
 \label{sec:pipeline_overview}
@@ -686,28 +616,33 @@ Ez a tervezési megoldás rendkívül stabil vizuális visszajelzést biztosít 
 A teljes rendszer a tervezéstől a megvalósításig egymásra épülő fázisokból áll, amelyek a teljes adatfeldolgozási és tanítási láncot lefedik. Ezeket a tervezési fázisokat az alábbi számozott pontokban foglalom össze, a fázisok közötti összefüggéseket és a teljes rendszerfolyamatot pedig a \ref{fig:full_pipeline}.~ábra szemlélteti.
 
 \begin{enumerate}
-  \item \textbf{Adathalmaz-elemzés} (\texttt{01\_analyze\_\allowbreak datasets.py}): A 6 publikus adathalmaz kategóriaeloszlásának feltárása.
-  \item \textbf{Mikrofonos előkészítés} (\texttt{02}--\texttt{04}): Összefűzés, felvétel, szeletelés.
-  \item \textbf{Végső adathalmaz összeállítása} (\texttt{05\_assemble\_\allowbreak dataset.py}): 7 osztály $\times$ 1500 minta.
-  \item \textbf{Jellemzőkinyerés és augmentáció} (\texttt{06\_extract\_\allowbreak features.py}): Log-Mel, STFT, MFCC kinyerése + MacBook-augmentáció $\rightarrow$ \texttt{.npy} fájlok.
-  \item \textbf{Modell tanítása} (\texttt{10\_train\_*} szkriptek): Google Colab GPU-n.
-  \item \textbf{Valós idejű felismerés} (\texttt{07\_realtime\_\allowbreak recognition.py}): Élő mikrofon bemenet.
+  \item \textbf{Tiszta adathalmaz előkészítése} (\texttt{01\_prepare\_clean\_dataset.py}): A forrásfájlok Train/Val/Test rétegzett elosztása csoportszinten (leakage elkerülése), majd 1 másodperces szeletelés.
+  \item \textbf{Mikrofonos újrafelvétel} (\texttt{02\_acquire\_mic\_data.py}): A tiszta tanító halmaz kimentése, folyamatos audióvá fűzése, majd telefonos lejátszás közbeni mikrofonos rögzítése és újraszeletelése.
+  \item \textbf{Adathalmazok fúziója és ellenőrzése} (\texttt{03a\_merge\_mic\_to\_train.py} és \texttt{03b\_check...}): A mikrofonos minták beolvasztása kizárólag a tanító (train) halmazba, majd a darabszámok integritásvizsgálata.
+  \item \textbf{Jellemzőkinyerés és augmentáció} (\texttt{04a\_extract\_features.py}): Log-Mel, STFT, MFCC mátrixok és nyers hullámformák kinyerése, kiegészítve a tiszta train minták szoftveres torzításával (reverb, zajkeverés, pre-emphasis).
+  \item \textbf{Modell tanítása} (\texttt{06\_train\_model\_colab/} mappában): A saját 2D CNN (VGG-stílusú) és a YAMNet Transfer Learning modellek betanítása Google Colab GPU-n.
+  \item \textbf{Valós idejű felismerés} (\texttt{05a\_realtime\_...} vagy \texttt{05b\_realtime\_yamnet.py}): Élő, mikrofonos hangbevitel valós idejű feldolgozása, jellemzőkinyerése és stabilizált predikciója (0,25 másodpercenként).
 \end{enumerate}
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
     node distance=0.6cm,
-    flowstep/.style={draw, rectangle, minimum height=0.9cm, minimum width=8.5cm, fill=blue!5!white, align=left, font=\footnotesize, rounded corners, text width=8.3cm},
+    flowstep/.style={draw, rectangle, minimum height=0.9cm, minimum width=9.5cm, fill=blue!5!white, align=left, font=\footnotesize, rounded corners, text width=9.3cm},
     arrow/.style={thick,->,>=stealth}
 ]
   % Nodes
-  \node (s1) [flowstep] {\textbf{1. Adathalmaz-elemzés} (\texttt{01\_analyze\_datasets.py}) \\ Publikus adathalmazok tartalmának és eloszlásának feltárása};
-  \node (s2) [flowstep, below=of s1] {\textbf{2. Mikrofonos előkészítés} (\texttt{02\_record\_...} -- \texttt{04\_slice\_...}) \\ Organikus felvételek rögzítése és szeletelése};
-  \node (s3) [flowstep, below=of s2] {\textbf{3. Végső adathalmaz összeállítása} (\texttt{05\_assemble\_dataset.py}) \\ Hibrid adathalmaz létrehozása (7 osztály $\times$ 1500 minta)};
-  \node (s4) [flowstep, below=of s3] {\textbf{4. Jellemzőkinyerés és augmentáció} (\texttt{06\_extract\_features.py}) \\ Log-Mel/STFT/MFCC kinyerés + szoba/zaj szimuláció $\rightarrow$ \texttt{.npy}};
-  \node (s5) [flowstep, below=of s4] {\textbf{5. Modell tanítása} (\texttt{10\_train\_log\_mel.py} stb.) \\ 2D CNN modellek betanítása Google Colab felhős GPU környezetben};
-  \node (s6) [flowstep, below=of s5] {\textbf{6. Valós idejű felismerés} (\texttt{07\_realtime\_recognition.py}) \\ Élő mikrofon stream feldolgozása és mozgóátlagos predikció};
+  \node (s1) [flowstep] {\textbf{1. Tiszta adathalmaz előkészítése} (\texttt{01\_prepare\_clean\_dataset.py}) \\ Rétegzett elosztás (Train/Val/Test) a leakage elkerülésével, majd 1mp-es szeletelés};
+  
+  \node (s2) [flowstep, below=of s1] {\textbf{2. Mikrofonos újrafelvétel} (\texttt{02\_acquire\_mic\_data.py}) \\ A train halmaz folyamatos lejátszása, mikrofonos rögzítése és újraszeletelése};
+  
+  \node (s3) [flowstep, below=of s2] {\textbf{3. Adathalmazok fúziója} (\texttt{03a\_merge\_...}, \texttt{03b\_check\_...}) \\ Mikrofonos minták beolvasztása a train halmazba, integritás ellenőrzése};
+  
+  \node (s4) [flowstep, below=of s3] {\textbf{4. Jellemzőkinyerés \& Augmentáció} (\texttt{04a\_extract\_...}, \texttt{04b\_check\_...}) \\ Spektrogramok/nyers jel kinyerése + train minták szoftveres torzítása $\rightarrow$ \texttt{.npy}};
+  
+  \node (s5) [flowstep, below=of s4] {\textbf{5. Modell tanítása} (\texttt{06\_train\_model\_colab} scriptek) \\ CNN és YAMNet modellek betanítása Colab GPU-n (AdamW, Label Smoothing)};
+  
+  \node (s6) [flowstep, below=of s5] {\textbf{6. Valós idejű felismerés} (\texttt{05a\_realtime\_...} / \texttt{05b\_...}) \\ Élő audio stream feldolgozása, predikciós simítás és kijelzés};
 
   % Arrows
   \draw [arrow] (s1) -- (s2);
@@ -716,6 +651,6 @@ A teljes rendszer a tervezéstől a megvalósításig egymásra épülő fáziso
   \draw [arrow] (s4) -- (s5);
   \draw [arrow] (s5) -- (s6);
 \end{tikzpicture}
-\caption{A hangszerfelismerő rendszer teljes feldolgozási folyamatának lépései}
+\caption{A hangszerfelismerő rendszer végső adatfeldolgozási és tanítási folyamatának lépései}
 \label{fig:full_pipeline}
 \end{figure}

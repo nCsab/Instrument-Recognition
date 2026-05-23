@@ -11,7 +11,7 @@ CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 
 def get_audio_files(directory):
     if not os.path.exists(directory): return []
-    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.wav')]
+    return sorted([os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.wav')])
 
 
 def merge_class(cls):

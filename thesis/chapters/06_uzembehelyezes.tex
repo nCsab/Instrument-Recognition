@@ -32,12 +32,29 @@ pip install -r requirements.txt
     \textbf{}
     \item \textbf{Alkalmazás indítása:} A valós idejű parancssori felület az alábbi parancs futtatásával indítható el:
 \begin{verbatim}
-python scripts/07_realtime_recognition.py
+python scripts/05a_realtime_recognition.py
 \end{verbatim}
+    Amennyiben a YAMNet alapú modellt szeretnénk használni, a \texttt{05b\_realtime\_yamnet.py} scriptet kell elindítani.
 \end{enumerate}
 
 \section{Felmerült problémák és megoldások}
 \label{sec:problemak}
+
+A fejlesztés és az üzembe helyezés során több kritikus technikai kihívással is szembesültem, amelyek megoldása jelentősen formálta a rendszer végső architektúráját:
+
+\begin{enumerate}
+    \item \textbf{Adatszivárgás (Data Leakage) és a mikrofonos felvételek:}
+    Az első kísérletek során a modell kiemelkedő, 98\% feletti pontosságot ért el a teszthalmazon. Azonban az elemzések során kiderült, hogy a modell nem a hangszerek akusztikus jellemzőit, hanem a laptop beépített mikrofonjának alapzaját és a teremakusztikát (reverb) tanulta meg. Ennek oka az volt, hogy a mikrofonos újrafelvételeket a teljes adathalmazon elvégeztem. 
+    \textit{Megoldás:} Szigorúan kettéválasztottam a folyamatot. A mikrofonos újrafelvételt (\texttt{02\_acquire\_mic\_data.py}) kizárólag a tanító (train) halmazon hajtottam végre, míg a validációs és teszt halmazok teljesen tiszták maradtak. Így a tesztelés során garantáltan olyan tiszta környezetben kellett helytállnia a modellnek, amit korábban sosem hallott.
+
+    \item \textbf{Valós idejű hangrögzítés és a Buffer Underflow:}
+    A valós idejű felismerő modul kezdeti verziójában a hangkártya megszakítási (callback) függvényében végeztem el a jellemzőkinyerést és a neurális hálózat predikcióját. Mivel a TensorFlow inicializálása és a predikció lassabb volt, mint az audio pufferek beérkezése, a hangkártya illesztőprogramja folyamatosan alulcsordult (buffer underflow), ami pattogó hangot és az audio stream megszakadását eredményezett.
+    \textit{Megoldás:} Bevezettem egy producer-consumer (termelő-fogyasztó) aszinkron architektúrát. A callback függvény kizárólag egy szálbiztos FIFO sorba (\texttt{queue.Queue}) másolja a beérkező adatokat, majd azonnal visszatér (producer). Egy független főszál folyamatosan olvassa ezt a sort, és végzi a számításigényes predikciót (consumer), így a hangkártya sosem blokkolódik.
+
+    \item \textbf{TensorFlow dimenzióeltérések a YAMNet illesztésénél:}
+    A Transfer Learning során a pre-trainelt YAMNet modell 16\,000 Hz-es, 1D-s nyers lebegőpontos tömböt vár, miközben a korábbi kódjaim a Log-Mel spektrogram 2D generálására voltak felkészítve.
+    \textit{Megoldás:} A YAMNet alapú felismeréshez egy teljesen dedikált scriptet írtam (\texttt{05b\_realtime\_yamnet.py}), amely kikerüli a \texttt{librosa} alapú jellemzőkinyerést, a bejövő hangot \texttt{tf.float32} tenzorrá alakítja, és közvetlenül áttolja a betöltött YAMNet modellen, amely visszaadja az 1024 dimenziós beágyazást (embedding). Ezt kapja meg a saját osztályozónk.
+\end{enumerate}
 
 \section{Kísérleti eredmények és mérések}
 \label{sec:kiserletek}
@@ -60,3 +77,25 @@ A legnagyobb arányú tévesztések a következők szerint alakultak:
     \item \textbf{Ének és Háttérzaj:} A \texttt{Háttérzaj} minták 4,3\%-át (13 mintát) \texttt{Éneknek}, míg az \texttt{Ének} minták 4,3\%-át (13 mintát) \texttt{Háttérzajnak} jelölte a hálózat. Ez a mikrofonos zörejek, zihálások és az emberi beszéd/ének frekvenciatartományának átfedései miatt fordul elő, valamint a halkabb énekszakaszok és a környezeti zajok hasonlóságából adódik.
 \end{itemize}
 Mintent összevetve a Log-Mel alapú 2D CNN modell kiválóan teljesít: a legnehezebbnek bizonyuló \texttt{Nádas} osztályban is eléri a 86,3\%-os pontosságot, míg a többi zenei és környezeti kategóriában 89\% feletti egyedi pontosságot biztosít.
+
+\subsection{A 2D CNN és a YAMNet modellek összehasonlítása}
+
+A kísérletek utolsó fázisában összehasonlítottam a nulláról betanított (from scratch) VGG-stílusú 2D CNN modellem teljesítményét a Google által fejlesztett, AudioSet-en előtanított YAMNet modellen alapuló Transfer Learning osztályozóval. A méréseket a szeparált, tiszta teszthalmazon hajtottam végre.
+
+\begin{table}[H]
+\centering
+\caption{A két fő modellarchitektúra teljesítményének és paramétereinek összehasonlítása}
+\label{tab:model_comparison}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Modell architektúra} & \textbf{Összes paraméter} & \textbf{Tanítható paraméter} & \textbf{Teszt pontosság} \\
+\midrule
+Saját 2D CNN (Log-Mel) & 306\,151 & 304\,615 & 89,2\% \\
+YAMNet Transfer Learning & $\sim$3,8 millió & 361\,863 & \textbf{94,8\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A \ref{tab:model_comparison}.~táblázatból világosan látszik a Transfer Learning (tudástranszfer) fölénye: a YAMNet alapú modell közel 95\%-os pontosságot ért el, ami jelentősen felülmúlja a saját fejlesztésű CNN modell 89,2\%-os eredményét. A YAMNet az AudioSet több millió mintáján szerzett zenei és akusztikai tapasztalatát (a 3,5 millió lefagyasztott paraméterén keresztül) hihetetlenül hatékonyan tudta kamatoztatni a mi specifikus 7 osztályos problémánkon.
+
+Ugyanakkor a saját 2D CNN modell sem tekinthető kudarcnak. A mindössze $\sim$306 ezer paraméterével nagyságrendekkel kisebb memórialábnyommal rendelkezik, ami a valós idejű felismerés során sokkal alacsonyabb CPU-használatot és gyorsabb predikciós időt eredményez. Beágyazott (embedded) rendszereken vagy mikrokontrollereken (például Raspberry Pi) történő jövőbeli futtatás esetén a saját CNN egy sokkal racionálisabb és hatékonyabb választás lehet, hiszen a 89\%-os pontosság a gyakorlatban, a mozgóátlagos simítással kiegészítve már önmagában is rendkívül stabil felhasználói élményt nyújt.

@@ -152,7 +152,8 @@ def main():
         print("\n" + "=" * 60)
         print("FEATURE EXTRACTION - MIC DATASET (with raw segments for YAMNet)")
         print("=" * 60)
-        process_batch_dataset(mic_path, mic_out, aug_samples_path=None, extract_raw=True)
+        aug_preview_path = os.path.join(project_dir, "augmented_preview")
+        process_batch_dataset(mic_path, mic_out, aug_samples_path=aug_preview_path, extract_raw=True)
 
     print("\nDone.")
 

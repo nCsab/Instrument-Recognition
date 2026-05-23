@@ -167,9 +167,7 @@ def slice_all():
 
 
 def main():
-    print("==================================================")
-    print("MICROPHONE DATA ACQUISITION PIPELINE")
-    print("==================================================")
+    print("\nMICROPHONE DATA ACQUISITION PIPELINE\n")
     print("1. Prepare reference files (concatenate clean data)")
     print("2. Record mic audio interactively")
     print("3. Slice recorded audio into 1-second segments")

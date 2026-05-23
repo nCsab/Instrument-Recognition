@@ -2,7 +2,7 @@ import numpy as np
 import librosa
 
 
-def extract_log_mel(audio, sr=16000, n_mels=64, n_fft=1024, hop_length=512):
+def extract_log_mel(audio, sr=16000, n_mels=128, n_fft=1024, hop_length=256):
     mel_spec = librosa.feature.melspectrogram(
         y=audio, sr=sr, n_mels=n_mels, n_fft=n_fft, hop_length=hop_length
     )

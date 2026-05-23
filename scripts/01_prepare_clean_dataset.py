@@ -7,7 +7,7 @@ import soundfile as sf
 import numpy as np
 
 OWNDATASET_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset"
-OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
+OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_clean"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 SR = 16000
 BLOCK_DURATION = 5.0

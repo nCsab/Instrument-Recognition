@@ -2,8 +2,8 @@ import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-DATASET_DIR_CLEAN = os.path.join(PROJECT_DIR, "hybrid_dataset_own_final")
-DATASET_DIR_MIC = os.path.join(PROJECT_DIR, "hybrid_dataset_own_final_mic")
+DATASET_DIR_CLEAN = os.path.join(PROJECT_DIR, "dataset_clean")
+DATASET_DIR_MIC = os.path.join(PROJECT_DIR, "dataset_mic")
 
 
 def print_dataset_stats(dataset_dir, title=""):

@@ -9,7 +9,7 @@ import librosa
 import numpy as np
 
 # Config
-BASE_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
+BASE_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_clean"
 TO_RECORD_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/to_record"
 OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset/recorded_from_mic"
 CATEGORIES = ["guitar", "piano", "vocal", "string", "reed", "brass"]

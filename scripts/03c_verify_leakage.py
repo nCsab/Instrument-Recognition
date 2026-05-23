@@ -1,7 +1,7 @@
 import os
 import re
 
-DATASET_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final_mic"
+DATASET_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_mic"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 
 

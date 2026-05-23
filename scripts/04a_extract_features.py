@@ -136,7 +136,7 @@ def process_batch_dataset(dataset_path, output_path, aug_samples_path, extract_r
 def main():
     project_dir = "/Volumes/Kingston XS1000 Media/project"
 
-    clean_path = os.path.join(project_dir, "hybrid_dataset_own_final")
+    clean_path = os.path.join(project_dir, "dataset_clean")
     clean_out = os.path.join(project_dir, "processed_data_clean")
 
     if os.path.exists(clean_path):
@@ -145,7 +145,7 @@ def main():
         print("=" * 60)
         process_batch_dataset(clean_path, clean_out, aug_samples_path=None, extract_raw=False)
 
-    mic_path = os.path.join(project_dir, "hybrid_dataset_own_final_mic")
+    mic_path = os.path.join(project_dir, "dataset_mic")
     mic_out = os.path.join(project_dir, "processed_data_mic")
 
     if os.path.exists(mic_path):

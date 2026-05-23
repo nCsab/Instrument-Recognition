@@ -3,8 +3,8 @@ import shutil
 import random
 
 OWNDATASET_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset"
-SOURCE_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final"
-OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/hybrid_dataset_own_final_mic"
+SOURCE_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_clean"
+OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_mic"
 MIC_DIR = os.path.join(OWNDATASET_DIR, "recorded_from_mic")
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 

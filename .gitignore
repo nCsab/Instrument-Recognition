@@ -1,7 +1,8 @@
 # Datasets and generated data
 dataset/
 hybrid_dataset/
-hybrid_dataset_own_final/
+dataset_clean/
+dataset_mic/
 augmented_samples/
 owndataset/
 processed_data/

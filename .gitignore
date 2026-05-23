@@ -48,6 +48,10 @@ thesis/missfont.log
 models/*.keras
 models/*.h5
 
+# Local verification scripts
+scripts/verify_leakage.py
+scripts/03c_verify_leakage.py
+
 # Python cache
 __pycache__/
 *.pyc

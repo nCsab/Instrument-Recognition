@@ -49,7 +49,7 @@ def slice_and_save(block_path, dest_dir, prefix, group_id):
 def process_class(cls):
     print(f"\nProcessing: {cls}...")
 
-    clean_blocks_dir = os.path.join(OWNDATASET_DIR, cls, f"{cls}_5sec")
+    clean_blocks_dir = os.path.join(OWNDATASET_DIR, "instruments", cls, f"{cls}_5sec")
     clean_blocks = get_audio_files(clean_blocks_dir)
     clean_blocks.sort()
 

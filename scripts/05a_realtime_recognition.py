@@ -8,8 +8,8 @@ import librosa
 from collections import deque
 from utils.feature_utils import extract_log_mel
 
-MODEL_TYPE = 'mic'
-MODEL_PATH = f"/Volumes/Kingston XS1000 Media/project/models_{MODEL_TYPE}/best_log_mel_2dcnn_model.keras"
+MODEL_TYPE = 'mic'  # Change to 'clean' to use clean dataset model
+MODEL_PATH = f"/Users/csabanagy/Desktop/project/models_{MODEL_TYPE}/best_log_mel_2dcnn_model.keras"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 SR = 16000

@@ -7,11 +7,16 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 from google.colab import drive
+import random
+
+random.seed(42)
+np.random.seed(42)
+tf.random.set_seed(42)
 
 drive.mount('/content/drive')
 
 PROJECT_ROOT = '/content/drive/MyDrive/Instrument_Recognition'
-DATASET_TYPE = 'mic'
+DATASET_TYPE = 'mic'  # YAMNet requires 'mic' (raw audio only extracted for mic dataset)
 DATA_PATH = os.path.join(PROJECT_ROOT, f'processed_data_{DATASET_TYPE}')
 MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, f'models_{DATASET_TYPE}')
 
@@ -104,7 +109,10 @@ y_val = np.load(os.path.join(DATA_PATH, 'y_labels_val.npy'))
 X_test_raw = np.load(os.path.join(DATA_PATH, 'X_raw_test.npy'))
 y_test = np.load(os.path.join(DATA_PATH, 'y_labels_test.npy'))
 
-print(f"Raw audio - Train: {X_train_raw.shape}, Val: {X_val_raw.shape}, Test: {X_test_raw.shape}")
+print("Raw audio shapes:")
+print(f"  train: {X_train_raw.shape}")
+print(f"  val  : {X_val_raw.shape}")
+print(f"  test : {X_test_raw.shape}\n")
 
 print("\nExtracting embeddings (Train)...")
 X_train = extract_yamnet_embeddings(X_train_raw)
@@ -113,7 +121,10 @@ X_val = extract_yamnet_embeddings(X_val_raw)
 print("Extracting embeddings (Test)...")
 X_test = extract_yamnet_embeddings(X_test_raw)
 
-print(f"\nEmbeddings - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+print("Embedding shapes:")
+print(f"  train: {X_train.shape}")
+print(f"  val  : {X_val.shape}")
+print(f"  test : {X_test.shape}\n")
 
 np.save(os.path.join(DATA_PATH, 'X_yamnet_emb_train.npy'), X_train)
 np.save(os.path.join(DATA_PATH, 'X_yamnet_emb_val.npy'), X_val)
@@ -159,9 +170,5 @@ report_dict = plot_results(y_test, y_pred, history, MODEL_NAME, MODEL_SAVE_PATH)
 micro_f1 = report_dict['accuracy']
 macro_f1 = report_dict['macro avg']['f1-score']
 
-print("\n" + "=" * 60)
 print(f"YAMNet Transfer Learning - Accuracy: {micro_f1*100:.1f}%")
 print(f"YAMNet Transfer Learning - Macro F1: {macro_f1*100:.1f}%")
-print(f"Custom CNN baseline:                 ~78%")
-print(f"Improvement:                         {(micro_f1 - 0.78)*100:+.1f} pp")
-print("=" * 60)

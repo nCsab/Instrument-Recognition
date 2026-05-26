@@ -1,49 +1,18 @@
 import os
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-DATASET_DIR_CLEAN = os.path.join(PROJECT_DIR, "dataset_clean")
-DATASET_DIR_MIC = os.path.join(PROJECT_DIR, "dataset_mic")
-
-
-def print_dataset_stats(dataset_dir, title=""):
-    if not os.path.exists(dataset_dir):
-        return False
-
-    classes = sorted([d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d))])
-
-    print("\n" + "=" * 60)
-    print(f"DATASET {title}")
-    print(f"Path: {os.path.basename(dataset_dir)}")
-    print("=" * 60)
-    print(f"{'Class':<15} | {'Train':<7} | {'Val':<7} | {'Test':<7} | {'Total':<7}")
-    print("-" * 60)
-
-    totals = [0, 0, 0]
+def print_stats(dataset_dir, title):
+    if not os.path.exists(dataset_dir): return
+    classes = sorted(d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d)))
+    
+    print(f"\n{title}\n{'CLASS':<15} | {'TRAIN':<7} | {'VAL':<7} | {'TEST':<7} | {'TOTAL':<7}")
+    t_tr, t_vl, t_ts = 0, 0, 0
     for cls in classes:
-        counts = []
-        for i, subset in enumerate(['train', 'val', 'test']):
-            d = os.path.join(dataset_dir, cls, subset)
-            n = len([f for f in os.listdir(d) if f.endswith('.wav')]) if os.path.exists(d) else 0
-            counts.append(n)
-            totals[i] += n
-        print(f"{cls:<15} | {counts[0]:<7} | {counts[1]:<7} | {counts[2]:<7} | {sum(counts):<7}")
-
-    print("-" * 60)
-    print(f"{'TOTAL':<15} | {totals[0]:<7} | {totals[1]:<7} | {totals[2]:<7} | {sum(totals):<7}")
-    print("=" * 60 + "\n")
-    return True
-
-
-def main():
-    found = False
-    if print_dataset_stats(DATASET_DIR_CLEAN, "CLEAN"):
-        found = True
-    if print_dataset_stats(DATASET_DIR_MIC, "MIC (AUGMENTED)"):
-        found = True
-    if not found:
-        print(f"Error: no dataset found at:\n- {DATASET_DIR_CLEAN}\n- {DATASET_DIR_MIC}")
-
+        c = [len([f for f in os.listdir(os.path.join(dataset_dir, cls, s)) if f.endswith('.wav')]) if os.path.exists(os.path.join(dataset_dir, cls, s)) else 0 for s in ['train', 'val', 'test']]
+        t_tr += c[0]; t_vl += c[1]; t_ts += c[2]
+        print(f"{cls:<15} | {c[0]:<7} | {c[1]:<7} | {c[2]:<7} | {sum(c):<7}")
+    print(f"{'TOTAL':<15} | {t_tr:<7} | {t_vl:<7} | {t_ts:<7} | {t_tr+t_vl+t_ts:<7}\n")
 
 if __name__ == "__main__":
-    main()
+    b_dir = "/Users/csabanagy/Desktop/project"
+    print_stats(os.path.join(b_dir, "dataset_clean"), "CLEAN DATASET\n")
+    print_stats(os.path.join(b_dir, "dataset_mic"), "MIC DATASET\n")

@@ -6,24 +6,31 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 from google.colab import drive
+import random
+
+# --- Kísérleti Kontroll Beállítások ---
+random.seed(42)
+np.random.seed(42)
+tf.random.set_seed(42)
 
 drive.mount('/content/drive')
 
 PROJECT_ROOT = '/content/drive/MyDrive/Instrument_Recognition'
-DATASET_TYPE = 'mic'
+DATASET_TYPE = 'mic'  # Lehetőségek: 'clean', 'augmented', 'mic'
+FEATURE_TYPE = 'log_mel'  # Lehetőségek: 'log_mel', 'stft', 'mfcc'
+
 DATA_PATH = os.path.join(PROJECT_ROOT, f'processed_data_{DATASET_TYPE}')
 MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, f'models_{DATASET_TYPE}')
-
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
-FEATURE_TYPE = 'log_mel'
 
 
 class SpecAugment(layers.Layer):
-    def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, **kwargs):
+    def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, apply_freq_mask=True, **kwargs):
         super().__init__(**kwargs)
         self.freq_mask_param = freq_mask_param
         self.time_mask_param = time_mask_param
         self.num_masks = num_masks
+        self.apply_freq_mask = apply_freq_mask
 
     def call(self, inputs, training=None):
         if not training:
@@ -31,20 +38,25 @@ class SpecAugment(layers.Layer):
         augmented = inputs
         freq_dim = tf.shape(inputs)[1]
         time_dim = tf.shape(inputs)[2]
+        
         for _ in range(self.num_masks):
-            f = tf.random.uniform([], 1, self.freq_mask_param, dtype=tf.int32)
-            f = tf.minimum(f, freq_dim)
-            f0 = tf.random.uniform([], 0, freq_dim - f, dtype=tf.int32)
-            indices = tf.range(freq_dim)
-            freq_mask = tf.cast(tf.logical_or(indices < f0, indices >= f0 + f), tf.float32)
-            augmented = augmented * tf.reshape(freq_mask, [1, -1, 1, 1])
+            # Frekvencia maszkolás (kivéve MFCC esetén)
+            if self.apply_freq_mask:
+                f = tf.random.uniform([], 1, self.freq_mask_param, dtype=tf.int32)
+                f = tf.minimum(f, freq_dim)
+                f0 = tf.random.uniform([], 0, freq_dim - f, dtype=tf.int32)
+                indices = tf.range(freq_dim)
+                freq_mask = tf.cast(tf.logical_or(indices < f0, indices >= f0 + f), tf.float32)
+                augmented = augmented * tf.reshape(freq_mask, [1, -1, 1, 1])
 
+            # Időbeli maszkolás (minden feature-nél alkalmazható)
             t = tf.random.uniform([], 1, self.time_mask_param, dtype=tf.int32)
             t = tf.minimum(t, time_dim)
             t0 = tf.random.uniform([], 0, time_dim - t, dtype=tf.int32)
             indices_t = tf.range(time_dim)
             time_mask = tf.cast(tf.logical_or(indices_t < t0, indices_t >= t0 + t), tf.float32)
             augmented = augmented * tf.reshape(time_mask, [1, 1, -1, 1])
+            
         return augmented
 
     def get_config(self):
@@ -53,14 +65,18 @@ class SpecAugment(layers.Layer):
             'freq_mask_param': self.freq_mask_param,
             'time_mask_param': self.time_mask_param,
             'num_masks': self.num_masks,
+            'apply_freq_mask': self.apply_freq_mask
         })
         return config
 
 
-def build_model(input_shape, num_classes):
+def build_model(input_shape, num_classes, feature_type):
+    # Log-Mel és STFT esetében alkalmazzuk a frekvencia-maszkolást, MFCC-nél kikapcsoljuk
+    apply_freq_mask = False if feature_type == 'mfcc' else True
+    
     model = models.Sequential([
         layers.Input(shape=input_shape),
-        SpecAugment(freq_mask_param=15, time_mask_param=8, num_masks=2),
+        SpecAugment(freq_mask_param=15, time_mask_param=8, num_masks=2, apply_freq_mask=apply_freq_mask),
 
         layers.Conv2D(32, (3, 3), padding='same'),
         layers.BatchNormalization(), layers.ReLU(),
@@ -147,46 +163,55 @@ def plot_results(y_test, y_pred, history, feature_type, save_path):
 
 
 # --- Main ---
-print(f"Loading data ({FEATURE_TYPE})...")
-X_train, y_train = load_subset('train', FEATURE_TYPE)
-X_val, y_val = load_subset('val', FEATURE_TYPE)
-X_test, y_test = load_subset('test', FEATURE_TYPE)
+def main():
+    print(f"Loading data ({FEATURE_TYPE})...")
+    X_train, y_train = load_subset('train', FEATURE_TYPE)
+    X_val, y_val = load_subset('val', FEATURE_TYPE)
+    X_test, y_test = load_subset('test', FEATURE_TYPE)
 
-num_classes = len(CLASSES)
-LABEL_SMOOTHING = 0.1
-y_train_smooth = tf.one_hot(y_train, num_classes) * (1.0 - LABEL_SMOOTHING) + (LABEL_SMOOTHING / num_classes)
-y_val_onehot = tf.one_hot(y_val, num_classes)
+    num_classes = len(CLASSES)
+    
+    # Szigorú Label Stratégia: One-Hot kódolás + Smoothing a tréningre
+    LABEL_SMOOTHING = 0.1
+    y_train_encoded = tf.one_hot(y_train, num_classes) * (1.0 - LABEL_SMOOTHING) + (LABEL_SMOOTHING / num_classes)
+    y_val_encoded = tf.one_hot(y_val, num_classes)
 
-print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+    print("Data shapes:")
+    print(f"  train: {X_train.shape}")
+    print(f"  val  : {X_val.shape}")
+    print(f"  test : {X_test.shape}\n")
 
-model = build_model((X_train.shape[1], X_train.shape[2], X_train.shape[3]), num_classes)
-model.summary()
+    model = build_model((X_train.shape[1], X_train.shape[2], X_train.shape[3]), num_classes, FEATURE_TYPE)
+    model.summary()
 
-os.makedirs(MODEL_SAVE_PATH, exist_ok=True)
+    os.makedirs(MODEL_SAVE_PATH, exist_ok=True)
 
-callbacks_list = [
-    callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-    callbacks.ModelCheckpoint(
-        os.path.join(MODEL_SAVE_PATH, f'best_{FEATURE_TYPE}_2dcnn_model.keras'),
-        monitor='val_accuracy', save_best_only=True
-    ),
-    callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
-]
+    callbacks_list = [
+        callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+        callbacks.ModelCheckpoint(
+            os.path.join(MODEL_SAVE_PATH, f'best_{FEATURE_TYPE}_2dcnn_model.keras'),
+            monitor='val_accuracy', save_best_only=True
+        ),
+        callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
+    ]
 
-print("\nTraining...")
-history = model.fit(
-    X_train, y_train_smooth,
-    validation_data=(X_val, y_val_onehot),
-    epochs=150, batch_size=32,
-    callbacks=callbacks_list
-)
+    print("\nTraining...")
+    history = model.fit(
+        X_train, y_train_encoded,
+        validation_data=(X_val, y_val_encoded),
+        epochs=150, batch_size=32,
+        callbacks=callbacks_list
+    )
 
-y_pred = np.argmax(model.predict(X_test), axis=1)
+    y_pred = np.argmax(model.predict(X_test), axis=1)
 
-print("\nClassification Report:")
-print(classification_report(y_test, y_pred, target_names=CLASSES))
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred, target_names=CLASSES))
 
-report_dict = plot_results(y_test, y_pred, history, FEATURE_TYPE, MODEL_SAVE_PATH)
+    report_dict = plot_results(y_test, y_pred, history, FEATURE_TYPE, MODEL_SAVE_PATH)
 
-print(f"Accuracy: {report_dict['accuracy']*100:.1f}%")
-print(f"Macro F1: {report_dict['macro avg']['f1-score']*100:.1f}%")
+    print(f"Accuracy: {report_dict['accuracy']*100:.1f}%")
+    print(f"Macro F1: {report_dict['macro avg']['f1-score']*100:.1f}%")
+
+if __name__ == "__main__":
+    main()

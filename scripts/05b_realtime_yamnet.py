@@ -11,8 +11,8 @@ import tensorflow_hub as hub
 import sounddevice as sd
 from collections import deque
 
-MODEL_TYPE = 'mic'
-CLASSIFIER_PATH = f"/Volumes/Kingston XS1000 Media/project/models_{MODEL_TYPE}/best_yamnet_transfer_model.keras"
+MODEL_TYPE = 'augmented'  # Change to 'clean' to use clean dataset model
+CLASSIFIER_PATH = f"/Users/csabanagy/Desktop/project/models_{MODEL_TYPE}/best_yamnet_transfer_model.keras"
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 SR = 16000

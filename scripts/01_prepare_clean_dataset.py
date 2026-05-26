@@ -6,9 +6,9 @@ import librosa
 import soundfile as sf
 import numpy as np
 
-OWNDATASET_DIR = "/Volumes/Kingston XS1000 Media/project/owndataset"
-OUTPUT_DIR = "/Volumes/Kingston XS1000 Media/project/dataset_clean"
-CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
+OWNDATASET_DIR = "/Users/csabanagy/Desktop/project/owndataset"
+OUTPUT_DIR = "/Users/csabanagy/Desktop/project/dataset_clean"
+CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 SR = 16000
 BLOCK_DURATION = 5.0
 CLIP_DURATION = 1.0
@@ -37,8 +37,6 @@ def slice_and_save(block_path, dest_dir, prefix, group_id):
     for i in range(num_clips):
         start = i * clip_samples
         clip = y[start:start + clip_samples]
-        if np.max(np.abs(clip)) < 0.01:
-            continue
         out_name = f"{prefix}_group{group_id}_clip{i:02d}.wav"
         out_path = os.path.join(dest_dir, out_name)
         sf.write(out_path, clip, SR)
@@ -49,7 +47,7 @@ def slice_and_save(block_path, dest_dir, prefix, group_id):
 def process_class(cls):
     print(f"\nProcessing: {cls}...")
 
-    clean_blocks_dir = os.path.join(OWNDATASET_DIR, "instruments", cls, f"{cls}_5sec")
+    clean_blocks_dir = os.path.join(OWNDATASET_DIR, "instruments", cls)
     clean_blocks = get_audio_files(clean_blocks_dir)
     clean_blocks.sort()
 
@@ -60,26 +58,40 @@ def process_class(cls):
     blocks_by_prefix = {}
     for block in clean_blocks:
         basename = os.path.basename(block)
-        parts = basename.split("_block")
-        prefix = parts[0] if len(parts) > 1 else cls
+        if cls == "noise":
+            if basename.startswith("esc50_"): prefix = "esc50_noise"
+            elif basename.startswith("silence_"): prefix = "silence"
+            elif basename.startswith("noise_"): prefix = "noise"
+            else: prefix = "other"
+        else:
+            parts = basename.split("_block")
+            prefix = parts[0] if len(parts) > 1 else cls
         blocks_by_prefix.setdefault(prefix, []).append(block)
 
     train_blocks, val_blocks, test_blocks = [], [], []
-
     random.seed(42)
+
+    # A noise osztályban most már pontosan a kívánt 240 db fizikailag tisztított fájl van,
+    # így mindet felhasználhatjuk anélkül, hogy lekorlátoznánk 100-ra.
+    if cls == "noise":
+        pass # Nem kell vágni, mehet az összes blokk
+
     for prefix, blocks in blocks_by_prefix.items():
         random.shuffle(blocks)
         n = len(blocks)
         n_train = int(n * TRAIN_RATIO)
         n_val = int(n * VAL_RATIO)
 
+        # A pontos 70/15/15 eloszlás érdekében manuális kerekítés korrekció
+        # De az int() általában a teszt halmaznak hagyja meg a maradékot, ami pont jó.
+        
         train_blocks.extend(blocks[:n_train])
         val_blocks.extend(blocks[n_train:n_train + n_val])
         test_blocks.extend(blocks[n_train + n_val:])
 
         print(f"  {prefix}: {n} blocks -> Train={n_train}, Val={n_val}, Test={n - n_train - n_val}")
 
-    print(f"Total blocks ({len(clean_blocks)}): Train={len(train_blocks)}, Val={len(val_blocks)}, Test={len(test_blocks)}")
+    print(f"Total blocks ({sum(len(b) for b in blocks_by_prefix.values())}): Train={len(train_blocks)}, Val={len(val_blocks)}, Test={len(test_blocks)}")
 
     cls_out_dir = os.path.join(OUTPUT_DIR, cls)
     if os.path.exists(cls_out_dir):
@@ -151,19 +163,14 @@ def main():
     if os.path.exists(OUTPUT_DIR):
         for cls in CLASSES:
             d = os.path.join(OUTPUT_DIR, cls)
-            if os.path.exists(d): shutil.rmtree(d)
+            if os.path.exists(d): shutil.rmtree(d, ignore_errors=True)
 
     for cls in CLASSES:
         process_class(cls)
 
-    print("\n" + "=" * 60)
-    print("BALANCING VAL/TEST SETS (BLOCK-LEVEL)")
-    print("=" * 60)
+    print("\nBALANCING VAL/TEST SETS (BLOCK-LEVEL)\n")
     for cls in CLASSES:
         balance_class(cls)
-    print("=" * 60)
-    print("Done.\n")
-
-
+    
 if __name__ == "__main__":
     main()

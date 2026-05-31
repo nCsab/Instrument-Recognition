@@ -1,190 +1,181 @@
 \chapter{Elméleti megalapozás és szakirodalmi tanulmány}
 \label{chap:elmelet}
 
-Ez a fejezet tartalmazza az elvégzett dokumentálódás és kutatómunka eredményeit, különös tekintettel az audio jelfeldolgozás és a gépi tanulás kapcsolatának elméleti hátterére, valamint a felhasznált technológiák ismertetésére. A bemutatott akusztikai jelfeldolgozási algoritmusok és azok neurális hálózatokra történő leképezése jelentős részben Valerio Velardo \textit{The Sound of AI} című átfogó nyílt oktatási anyagán \cite{velardo2020audio} alapulnak.
+Ebben a fejezetben azokat az elméleti és szakirodalmi alapokat foglalom össze, amelyek közvetlenül szükségesek a dolgozatban megvalósított hangszerfelismerő rendszer megértéséhez. Nem célom teljes audio-jelfeldolgozási vagy mélytanulási tankönyvet írni; inkább azt mutatom meg, hogy a hang fizikai tulajdonságaiból hogyan jutok el a tanítható spektrogram-reprezentációkig, majd ezekből hogyan lesz osztályozó modell.
 
-\section{Szakirodalmi tanulmány}
+\section{Szakirodalmi és technológiai háttér}
 \label{sec:szakirodalom}
+\label{sec:hasonlo_alkalmazasok}
+\label{sec:technologiak}
 
-% TODO: A hallgató által írandó szakirodalmi áttekintés.
+Az automatikus hangszerfelismerés több, egymáshoz kapcsolódó területre épül: környezeti hangosztályozásra, zenei információ-visszakeresésre, izolált hangszerhangok elemzésére és neurális audio-reprezentációkra. A saját munkám szempontjából nem az volt a cél, hogy egy meglévő rendszert lemásoljak, hanem az, hogy ezekből a megközelítésekből kiválasszam azt az irányt, amely egy kis méretű, saját gyűjtésű, valós időben is használható rendszerhez illeszkedik.
 
-\section{Elméleti alapok: Audio jelfeldolgozás}
+A környezeti hangosztályozás egyik ismert kiindulópontja az ESC adathalmaz \cite{piczak2015esc}, amely rövid hangrészleteken vizsgálja a kategóriafelismerést. Ez a dolgozatban főleg a \textit{noise} osztály miatt fontos: a rendszernek nemcsak hangszercsaládokat kell felismernie, hanem azt is, amikor nincs értelmezhető hangszeres bemenet. Közvetlenebb zenei előzmény az IRMAS adathalmaz \cite{bosch2012irmas}, amely már kifejezetten hangszerek felismerésére készült, zenei környezetben. Az én rendszerem ennél szűkebb feladatot vállal: rövid, egy másodperces mintákból hangszercsaládot becsül, mikrofonos használati helyzetre készülve.
+
+Az izolált hangszerhangokat tartalmazó adathalmazok közül az NSynth \cite{engel2017nsynth}, a TinySOL \cite{cella2020tinysol}, a Medley-solos-DB \cite{lostanlen2018medley} és a GoodSounds \cite{romani2015good} adtak fontos támpontot. Ezek közös tanulsága, hogy a hangszín nem egyetlen egyszerűen mérhető érték, hanem az időbeli burkológörbe, a felharmonikus szerkezet, a megszólaltatási mód és a felvételi környezet együttese. Emiatt a saját rendszeremben nem sok különálló hangszert, hanem hét akusztikailag indokolható osztályt különítek el: gitár, zongora, vokál, vonós, nádfúvós, rézfúvós és zaj/csend.
+
+A megvalósítás gyakorlati alapját Python környezetben a Librosa \cite{mcfee2015librosa}, a NumPy, a Matplotlib és a TensorFlow/Keras \cite{tensorflow2015-whitepaper} adta. A Librosa egységes módon támogatja a hullámformák betöltését, az STFT, MFCC és log-Mel reprezentációk előállítását, míg a TensorFlow/Keras a neurális modellek tanításához és kiértékeléséhez szolgált alapul. Az audio-jelfeldolgozási magyarázatoknál Valerio Velardo \textit{The Sound of AI} oktatási anyagát is felhasználtam \cite{velardo2020audio}. A YAMNet-alapú megközelítés nem a saját pipeline helyettesítője, hanem későbbi transzfer tanulási összehasonlítási pont.
+
+\section{Digitális hang és hangreprezentáció}
 \label{sec:elmeleti_alapok}
 
-A hangok gépi tanulási modellekkel történő feldolgozásához elengedhetetlen a fizikai hanghullámok megfelelő digitális reprezentációinak előállítása és a releváns jellemzők kinyerése. Az alábbiakban a hang digitális feldolgozásának főbb lépéseit mutatom be.
+A hang fizikai értelemben időben változó nyomáshullám, amelyet a számítógép csak digitális mintasorozatként tud kezelni. A hangszerfelismerés szempontjából négy alapfogalom fontos: az \textbf{időtartam}, az \textbf{amplitúdó}, a \textbf{frekvencia} és a \textbf{hangszín}. Az időtartam azt írja le, meddig áll fenn a hang; az amplitúdó a jel kitérésének mértéke; a frekvencia a hangmagasság fizikai alapja; a hangszín pedig az a tulajdonság, amely alapján két azonos hangmagasságú és hangerejű hangot is meg tudunk különböztetni.
 
-\subsection{A hang digitalizálása (ADC)}
+A hangszín szempontjából különösen fontos a felharmonikus szerkezet és az időbeli burkológörbe. A természetes hangszerek általában nem egyetlen frekvencián szólnak, hanem az alaphang mellett több felharmonikust is tartalmaznak. Emellett a hang felfutása, kitartása és lecsengése is erősen hangszerfüggő: egy zongorahang hirtelen indul és fokozatosan lecseng, míg egy vonós vagy fúvós hang hosszabban fenntartható.
 
-A fizikai világban a hang egy analóg, mechanikai hullám, amely időben és amplitúdóban is folytonos. A gépi tanulási modellek feldolgozásához ezt az Analóg-Digitális Konverzió (ADC) folyamatával diszkrét digitális adattá kell alakítani. Ennek a folyamatnak két fő fázisa van:
-\begin{itemize}
-    \item \textbf{Mintavételezés (Sampling):} Az időtengely diszkretizálása, melynek során a folyamatos jelből egyenlő időközönként pillanatfelvételeket rögzítünk. Ez a mintavételezési frekvencia (Sample Rate). A Nyquist-tétel értelmében a rögzíthető legmagasabb frekvencia a mintavételezési frekvencia fele, azaz a Nyquist-frekvencia (például hagyományos CD-k 44\,100 Hz-es mintavételezése esetén 22\,050 Hz). Ha ennél magasabb frekvenciakomponensek maradnának a jelben, az súlyos akusztikus torzítást, úgynevezett \textit{aliasing}-et (szellemképződést) okozna. Ennek elkerülése érdekében a hardveres ADC eszközök aluláteresztő (anti-aliasing) szűrővel vágják le a Nyquist-frekvencia feletti tartományt.
-    \item \textbf{Kvantálás (Quantization):} A mintavett analóg amplitúdóértékek legközelebbi diszkrét szintre történő kerekítése. A kvantálás felbontását a bitmélység (Bit Depth) adja meg, amely meghatározza a rögzíthető leghalkabb és leghangosabb hang közötti dinamikatartományt. A szabványos 16 bites felbontás ($2^{16}$, azaz 65\,536 lehetséges érték) kiváló, közel 96 dB-es Jel-Kvantálási Zaj Viszonyt (SQNR) és dinamikatartományt biztosít.
-\end{itemize}
-
-A \ref{tab:adc_params}.~táblázat összefoglalja a digitalizálás legfontosabb paramétereit és azok hatásait.
+A digitalizálás során az analóg hangból mintavételezéssel és kvantálással lesz diszkrét jelsorozat. A mintavételezési frekvencia azt adja meg, hogy másodpercenként hány ponton mérjük meg a jelet. A Nyquist-tétel alapján a rögzíthető legmagasabb frekvencia a mintavételezési frekvencia fele. A kvantálás az amplitúdóértékeket diszkrét szintekre kerekíti; ennek felbontását a bitmélység határozza meg.
 
 \begin{table}[H]
 \centering
-\caption{Az analóg-digitális konverzió (ADC) legfontosabb paraméterei}
+\caption{A digitális hang legfontosabb alapparaméterei}
 \label{tab:adc_params}
-\begin{tabular}{lll}
+\begin{tabular}{p{4.0cm}p{3.0cm}p{6.3cm}}
 \toprule
-\textbf{Paraméter} & \textbf{Tipikus érték (CD)} & \textbf{Hatása} \\
+\textbf{Paraméter} & \textbf{Példaérték} & \textbf{Jelentés} \\
 \midrule
-Mintavételezési freki. & 44\,100 Hz & Max.~rögzíthető freki.: 22\,050 Hz \\
-Bitmélység & 16 bit & Dinamikatartomány: $\sim$96 dB \\
-Csatornaszám & 2 (sztereó) & Térbeli információ megőrzése \\
-Nyers adatméret (1 perc) & $\sim$5,49 MB & WAV formátumban, tömörítetlen \\
+Mintavételezési frekvencia & 16\,000 vagy 44\,100 Hz & Meghatározza az időbeli felbontást és a rögzíthető felső frekvenciatartományt. \\
+Bitmélység & 16 bit & Meghatározza az amplitúdó felbontását és a dinamikatartományt. \\
+Csatornaszám & mono / sztereó & A dolgozatban a feldolgozás egyszerűsítése miatt mono jeleket használok. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{A jelek előkészítése: Keretezés és Ablakozás}
-
-A folytonos audio streamet a jelfeldolgozáshoz és a statisztikai jellemzők kiszámításához rövid, általában kettő hatványának megfelelő méretű (például 512 vagy 1024 mintából álló) ablakokra, azaz keretekre (frames) bontjuk. Az analizálandó zenei események kerethatáron történő elvesztésének elkerülése végett a kereteket gyakran átfedéssel, egy meghatározott eltolási lépésköz (hop length) alkalmazásával toljuk el egymáson. 
-
-Mivel a mesterségesen levágott digitális keretek széleinél ugrásszerű megszakadások keletkeznek, amelyek a frekvenciaelemzés során hamis, magas frekvenciájú \textit{spektrális szivárgást} (spectral leakage) okoznak, a jelekre ablakozó függvényeket (például Hann-ablak) alkalmazunk, amelyek a keretek széleit nullába futtatva "elsimítják" azokat. A \ref{fig:framing_windowing}.~ábra szemlélteti ezt a folyamatot.
+A frekvenciaelemzéshez a folytonos mintasorozatot rövid, átfedő keretekre bontjuk. Ezt nevezzük keretezésnek. Mivel a keretek széleinél mesterséges megszakadások keletkezhetnek, az egyes keretekre ablakozó függvényt, például Hann-ablakot alkalmazunk. Ez csökkenti a spektrális szivárgást, vagyis azt a jelenséget, amikor a vágás miatt hamis frekvenciakomponensek jelennek meg.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{fig_framing_windowing.png}
-    \caption{A keretezés (framing) és az ablakozás (windowing) folyamata: a jelet átfedő keretekre bontjuk, majd Hann-ablakot alkalmazunk a spektrális szivárgás elkerülése érdekében}
+    \includegraphics[width=0.82\textwidth]{fig_framing_windowing.png}
+    \caption{A keretezés és ablakozás folyamata: a hangjelet rövid, átfedő ablakokra bontjuk, majd az egyes keretek széleit simítjuk.}
     \label{fig:framing_windowing}
 \end{figure}
 
-\subsection{Időtartománybeli jellemzők}
+\section{Spektrogramok és tanulható bemenetek}
+\label{sec:spektrogramok}
 
-Az időtartománybeli (time-domain) jellemzőket közvetlenül a hang hullámformájából (waveform) nyerjük ki, és keretenként számítjuk ki őket. Bár a modern mélytanulás kevésbé támaszkodik rájuk, ezek az értékek sokat elárulnak a különböző zenei műfajok és hangszercsaládok akusztikai eltéréseiről.
-
-\begin{itemize}
-    \item \textbf{Amplitúdó burkológörbe (Amplitude Envelope):} A kereten belüli maximális amplitúdóértékekből álló burkológörbe. Jól mutatja a hangok kezdetét (onset), a felfutás (attack) és a lecsengés (decay) idejét.
-    \item \textbf{Gyökátlagos négyzetes energia (RMSE):} A keret összes mintájának négyzetes átlagából vont gyök. Sokkal hűebben tükrözi az ember által érzékelt hangerőt (loudness), és jóval kevésbé érzékeny a kiugró, hibás mintákra (outlierekre), mint a burkológörbe.
-    \item \textbf{Nullátmenet-gyakoriság (Zero-Crossing Rate -- ZCR):} A jel amplitúdójának előjelváltásait számlálja az időtengelyen egy adott kereten belül. Minél gyorsabban oszcillál, azaz minél zajosabb vagy ütősebb a hang, annál magasabb a ZCR értéke. Ez a metrika a gyakorlatban kiválóan elkülöníti a zöngés, tiszta harmonikus hangokat (például az éneket vagy a zongorát, ahol a ZCR alacsony) az erős zaj-komponenssel rendelkező vagy zöngétlen hangoktól.
-\end{itemize}
-
-\subsection{Hangszercsaládok akusztikai indoklása és hullámformái}
-\label{subsec:hangszercsaladok}
-
-A hangszerfelismerő rendszer nem egyedi hangszereket, hanem \textbf{hangszercsaládokat} különít el. Ez a döntés nem önkényes, hanem az akusztika fizikájában gyökerezik: az egy családba tartozó hangszerek – azonos hangkeltési elvük és hasonló testszerkezetük miatt – rendkívül hasonló hullámformákat és spektrális lenyomatokat produkálnak, amelyeket a neurális hálózatok is azonos mintázatokként azonosítanak.
-
-A \ref{tab:instrument_families}.~táblázat összefoglalja a vizsgált hangszercsaládokat és azok jellemzőit.
-
-\newpage
-\begin{longtable}{p{2.0cm}p{2.8cm}p{3.0cm}p{5.2cm}}
-\caption{A rendszerben használt hangszercsaládok, a hangkeltés mechanizmusa és a hullámforma jellemzői}
-\label{tab:instrument_families} \\
-\toprule
-\textbf{Osztály} & \textbf{Hangszerek} & \textbf{Hangkeltés elve} & \textbf{Hullámforma jellemzői} \\
-\midrule
-\endfirsthead
-\multicolumn{4}{c}{\textit{\tablename\ \thetable{} -- Folytatás az előző oldalról}} \\
-\toprule
-\textbf{Osztály} & \textbf{Hangszerek} & \textbf{Hangkeltés elve} & \textbf{Hullámforma jellemzői} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Gitár & Akusztikus és elektromos gitár & Húr pengetése & Gyors, éles tranziens (attack), exponenciális lecsengés (decay). A húr szabadon rezeg. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_guitar.png}} \\
-\midrule
-Zongora & Zongora, e-piano & Húr leütése kalapáccsal & Nagyon éles, impulzusszerű tranziens, majd hosszú, fokozatos lecsengés. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_piano.png}} \\
-\midrule
-Vokál & Énekhang, rap, torokének & Hangszálagok rezgése & Kváziperiodikus, folytonos hullámforma. Formánsok (a vokális traktus rezonanciái) egyedi spektrális ujjlenyomatot adnak. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_vocal.png}} \\
-\midrule
-Vonósok & Hegedű, brácsa, cselló, nagybőgő & Vonó--húr súrlódás & Kitartott, egyenletes amplitúdó mindaddig, amíg a vonó mozog. Csak a test mérete tér el, ami a felhangok relatív intenzitását befolyásolja (nem a burkoló formáját). \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_string.png}} \\
-\midrule
-Nádfúvósok & Klarinét, szaxofon, oboa, fagott & Nád rezgése & Folytonos, kitartott hullámforma. A nád típusa (egy- vs. kétnádas) módosítja a páratlan felhangok arányát, de a burkológörbe azonos jellegű. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_reed.png}} \\
-\midrule
-Rézfúvósok & Trombita, harsona, kürt, tuba & Ajkak rezgése fúvókán & Folytonos, erőteljes amplitúdó, intenzív felharmonikusok. A felhang\-szerkezet az ajkak feszességétől függ. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_brass.png}} \\
-\midrule
-Zaj/Csend & Környezeti zajok, szél, forgalom & Véletlenszerű rezgés & Aperiodikus, rendszertelen hullámforma; nincs domináns frekvencia\-komponens. \\*
-\multicolumn{4}{c}{\includegraphics[height=1.5cm]{fig_table_noise.png}} \\
-\end{longtable}
-
-Az egy osztályba tartozó hangszerek periodikus hullámformáinak mikroszkopikus hasonlóságát az alábbi ábra részletesen is szemlélteti. Fontos megjegyezni, hogy a hangszín (timbre) akusztikai definíciója szerint az a tulajdonság, amely alapján két azonos hangmagasságú és hangerejű hangot megkülönböztetünk. Ennek megfelelően, a vizuális összehasonlíthatóság és a ,,laboratóriumi tisztaságú'' elemzés érdekében az összes ábrázolt hangszermintát algoritmikusan egy közös alapfrekvenciára (440 Hz, A4) transzponáltuk. Így a periódusidők okozta vizuális különbségek megszűnnek, és az ábrán látható burkológörbék kizárólag a hangszerek testéből és hangképzéséből fakadó egyedi felharmonikus-karakterisztikát mutatják.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{fig_all_waveforms_combined.png}
-    \caption{A rendszerben használt főbb osztályok mikroszkopikus (5 ms-os) periodikus hullámformáinak összehasonlítása. A vizuális konzisztencia érdekében minden hangszermintát azonos, 440 Hz-es (A4) alapfrekvenciára transzponáltunk. Jól megfigyelhető, hogy a periódusidők kiegyenlítése után az egy osztályba tartozó hangszerek hullámformájának alapszerkezete mekkora hasonlóságot mutat.}
-    \label{fig:all_waveforms_combined}
-\end{figure}
-
-\subsection{Frekvenciatartománybeli jellemzők}
-
-Mivel a puszta időtartománybeli adatok elveszítik a hang pontos frekvenciakomponenseinek eloszlását, nem tudnak eleget a hangszer egyedi hangszínéről (timbre). Ennek vizsgálatához a jeleket a \textbf{Rövid idejű Fourier-transzformáció (STFT)} segítségével frekvenciatartományba konvertáljuk. Az STFT algoritmus az összetett hangokat egyszerű szinuszhullámokra bontja, eredményül pedig egy olyan spektrogramot kapunk, amely egy 2D-s hőtérképen (idő és frekvencia) mutatja meg a komponensek energiájának változását.
+A nyers hullámforma közvetlenül is tartalmaz minden információt, de egy kis méretű saját modell számára nehezen tanulható bemenet. Ezért a hangot célszerű idő-frekvencia reprezentációvá alakítani. A rövid idejű Fourier-transzformáció (STFT) minden keretet frekvenciakomponensekre bont, az eredmény pedig egy spektrogram: egy képszerű mátrix, ahol az egyik tengely az időt, a másik a frekvenciát, a színintenzitás pedig az energiát jelöli.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{fig_spectrogram_example.png}
-    \caption{Egy zongoraakkord STFT-alapú spektrogramja: a vízszintes tengely az időt, a függőleges tengely a frekvenciát, a szín intenzitása pedig az energiát (dB) jelöli}
+    \includegraphics[width=0.78\textwidth]{fig_spectrogram_example.png}
+    \caption{Egy rövid gitárhang hullámformája és STFT-spektrogramja. A spektrogramon az idő és frekvencia mentén láthatóvá válik, hol található a hang energiája.}
     \label{fig:spectrogram_example}
 \end{figure}
 
-A legfontosabb spektrális metrikák:
-\begin{itemize}
-    \item \textbf{Sávenergia-arány (Band Energy Ratio -- BER):} Egy előre meghatározott vágási frekvencia alatti és feletti frekvenciasávokban lévő energia (teljesítmény) arányát fejezi ki, vagyis megmutatja, mennyire dominánsak a mély hangok a vizsgált mintában.
-    \item \textbf{Spektrális súlypont (Spectral Centroid):} A magnitúdóspektrum frekvenciáinak intenzitással súlyozott átlaga (a hang energiájának súlypontja). Az emberi fül ezt a hangszín \textit{világosságaként} (brightness) érzékeli: a rezes, éles hangszerek (pl. rézfúvósok) súlypontja magasan van, míg a tompább akusztikus hangszereké lejjebb.
-    \item \textbf{Spektrális sávszélesség (Spectral Bandwidth):} A súlypont körüli energiaeloszlás kiterjedése (szórása). Szűk sávszélesség egy tiszta, koncentrált hangot jelöl (pl. szinuszhullám), míg széles sávszélesség zajos, szétszórt spektrumra utal.
-\end{itemize}
-
-\subsection{Percepciós jellemzők és a Mel-spektrogram}
-
-A modern gépi tanulásban a modellek pontossága nagyságrendekkel javul, ha a betáplált adatokat az emberi hallás pszichoakusztikai sajátosságaihoz igazítjuk. Az emberi fül sem a hangerőt, sem a frekvenciákat nem lineárisan érzékeli.
-
-A hangosság (loudness) modellálása érdekében az STFT kiszámítása után a kapott lineáris amplitúdó-értékeket egy logaritmikus decibel (dB) skálára konvertáljuk. Ugyanakkor a frekvencia-érzékelésünk is torzított: az alacsony frekvenciák közötti eltéréseket (pl. 200 Hz és 400 Hz között) zeneileg markánsnak halljuk, míg a magas tartományokban az azonos Hz értékű különbségeket (pl. 10\,000 Hz és 10\,200 Hz) az emberi fül szinte egyáltalán nem képes megkülönböztetni.
-
-Ezt a biológiai sajátosságot hivatott lekövetni a \textbf{Mel-skála}, amely az emberi érzékeléshez igazítja a frekvenciatengelyt. Az algoritmus az STFT kimenetére egymást átfedő háromszög-szűrőket (Mel-szűrőbankokat) illeszt, amelyek a mélyebb frekvenciákon sűrűbben, a magasabbakon ritkábban helyezkednek el. Ennek az eljárásnak a végeredménye a \textbf{Mel-spektrogram}. A \ref{fig:mel_vs_linear}.~ábra szemlélteti a lineáris és a Mel-skálájú frekvenciatengely közötti különbséget.
+A lineáris frekvenciaskála mellett gyakran használunk perceptuális skálákat is. Az emberi hallás az alacsony frekvenciák közötti különbségekre érzékenyebb, míg magas frekvenciákon kevésbé finom a megkülönböztetés. Ezt követi a Mel-skála: a mély tartományt részletesebben, a magas tartományt tömörebben ábrázolja. Ha az STFT után Mel-szűrőbankot és logaritmikus decibel skálázást alkalmazunk, log-Mel spektrogramot kapunk.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{fig_mel_vs_linear.png}
-    \caption{Egy hangfelvétel lineáris frekvenciaskálájú (felső) és Mel-skálájú (alsó) spektrogramjának összehasonlítása. A Mel-skála az alacsony frekvenciákon finomabb felbontást biztosít, így az ember számára releváns hangmagasság-információt hűebben tükrözi.}
+    \includegraphics[width=0.82\textwidth]{fig_mel_vs_linear.png}
+    \caption{Elméleti szemléltetés ugyanazon gitárhang lineáris STFT- és log-Mel spektrogramjával. A Mel-skála az emberi hallás frekvenciaérzékeléséhez igazítja a reprezentációt, ezért a mélyebb tartományt részletesebben kezeli.}
     \label{fig:mel_vs_linear}
 \end{figure}
 
-Míg korábban a gépi tanulásban a hangszín (timbre) és a beszéd (formánsok) modellezésére a Mel-spektrogram további Diszkrét Koszinusz Transzformációjával (DCT) előállított \textbf{MFCC} (Mel-Frequency Cepstral Coefficients) együtthatókat használták, a mai modern Konvolúciós Neurális Hálózatok (CNN) és mélytanulásos (Deep Learning) architektúrák többnyire magát a nyers Mel-spektrogramot alkalmazzák. Az MFCC használata túlzott emberi előítéleteket és adatvesztést jelenthet a hálózat számára. Ezzel szemben a 2D-s képi mátrixként betáplált Mel-spektrogramból a hálózat saját maga tanulja meg kinyerni azokat a komplex rejtett reprezentációkat, amelyek az osztályozáshoz és az eszközök felismeréséhez szükségesek.
-
-A \ref{tab:mfcc_vs_mel}.~táblázat összefoglalja a két megközelítés közötti különbségeket.
+A dolgozatban három jellemzőkinyerési irányt használok összehasonlítási alapként. Az \textbf{STFT} közvetlen, lineáris frekvenciatengelyű spektrogramot ad, ezért alapvető frekvencia-idő baseline. Az \textbf{MFCC} klasszikus, tömörített audiojellemző, amely a Mel-spektrum diszkrét koszinusz transzformációjával keletkezik, és főleg hagyományos gépi tanulási feladatokban terjedt el. A \textbf{log-Mel spektrogram} a kettő között helyezkedik el: képszerű struktúrát őriz meg, de a frekvenciatengelyt az emberi halláshoz igazítja.
 
 \begin{table}[H]
 \centering
-\caption{Mel-spektrogram és MFCC összehasonlítása gépi tanulási szempontból}
+\caption{A három vizsgált bemeneti reprezentáció elméleti szerepe}
 \label{tab:mfcc_vs_mel}
-\begin{tabular}{p{3.5cm}p{5.0cm}p{5.0cm}}
+\begin{tabular}{p{2.6cm}p{4.0cm}p{6.4cm}}
 \toprule
-\textbf{Szempont} & \textbf{MFCC} & \textbf{Mel-spektrogram} \\
+\textbf{Reprezentáció} & \textbf{Jelleg} & \textbf{Miért került be a dolgozatba?} \\
 \midrule
-Adat típusa & 1D koefficiens-vektor (általában 13-40 érték/keret) & 2D mátrix (frekvencia $\times$ idő hőtérkép) \\
-\midrule
-Információ-megőrzés & A DCT lépés eldobja a finom spektrális részleteket & Az összes Mel-szűrőbank kimenetét megőrzi \\
-\midrule
-Emberi torzítás & Erős (formánsokra fókuszál) & Közepes (logaritmikus skálázás) \\
-\midrule
-Modern alkalmazás & Hagyományos ML (SVM, GMM) & Deep Learning (CNN, Transfer Learning) \\
+STFT & Lineáris spektrogram & Megmutatja, hogyan teljesít a közvetlen frekvencia-idő ábrázolás. \\
+MFCC & Tömörített kepsztrális jellemző & Klasszikus audio baseline, kisebb dimenzióval és erősebb előfeldolgozással. \\
+Log-Mel & Perceptuális spektrogram & CNN-hez jól illeszkedő, képszerű és hallásközeli reprezentáció. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\section{Ismert hasonló alkalmazások}
-\label{sec:hasonlo_alkalmazasok}
+\section{Neurális osztályozás spektrogramokon}
+\label{sec:neuralis_osztalyozas}
 
-% TODO: A hallgató által megírandó rész a meglévő szakmai megoldásokról és appokról.
+A hangszerfelismerés felügyelt osztályozási feladat: minden tanítómintához tartozik egy bemenet és egy címke. A modell feladata, hogy a bemenet alapján hét kategória közül válasszon. Többosztályos neurális hálózatnál a kimeneti réteg tipikusan softmax aktivációt használ, amely minden osztályhoz egy valószínűségszerű értéket rendel. A prediktált osztály az lesz, amelynek a kimeneti értéke a legnagyobb.
 
-\section{Felhasznált technológiák és eszköztár}
-\label{sec:technologiak}
+A tanítás során a hálózat a hibás predikciók alapján módosítja a súlyait. A validációs halmaz szerepe az, hogy mérje: a modell nemcsak a tanítóadatokat jegyezte-e meg, hanem új mintákon is képes-e általánosítani. A túlilleszkedés (overfitting) akkor jelenik meg, amikor a modell a tanítóhalmazon jól teljesít, de a validációs vagy teszthalmazon gyengébben. Ennek mérséklésére használhatók például dropout rétegek, adataugmentáció, címkesimítás, valamint korai leállítás.
 
-A gépi tanuláshoz és az audio jelfeldolgozáshoz (a hullámformák betöltésétől a jellemzők kinyeréséig) szükséges szoftveres folyamatok kivitelezésére a széles körben elterjedt \textbf{Python} programozási nyelvet alkalmaztam. A fejlesztési és tesztelési fázisokban interaktív Jupyter Notebookokat is használtam, amelyek megkönnyítették a hangfájlok auditív ellenőrzését és a kód vizualizációját. Az adatfeldolgozási szoftveres \textit{stack} (eszközkészlet) az alábbi főbb könyvtárakra épül:
+Spektrogramok esetében a 2D konvolúciós neurális hálózat természetes választás, mert a bemenet képszerű: az egyik tengely az időt, a másik a frekvenciát jelöli. A konvolúciós szűrők lokális idő-frekvencia mintázatokat tanulnak, például hirtelen tranzienseket, kitartott harmonikus sávokat vagy zajos spektrális tartományokat.
 
-\begin{itemize}
-    \item \textbf{Librosa:} A legfontosabb nyílt forráskódú Python könyvtár a zenei adatok és audio jelek elemzéséhez. Hatékony, beépített függvényekkel (például a \texttt{librosa.load}, \texttt{librosa.stft}, vagy a \texttt{librosa.feature.melspectrogram}) támogatja az időbeli és frekvenciatartománybeli komplex jellemzőkinyerést anélkül, hogy az algoritmusokat nulláról (from scratch) kellene implementálni. Alapértelmezett mintavételezési frekvenciája a gépi elemzéseknél elterjedt 22\,050 Hz, emellett a feldolgozás egyszerűsítése érdekében automatikusan monó jellé konvertálja a bemenetet.
-    \item \textbf{NumPy:} A hangjelek és spektrogramok memóriában történő tárolásáért felel. Az egydimenziós (nyers hanghullám) és többdimenziós (Mel-spektrogram) számtömbökként (array) történő adatkezelés rendkívül gyors és optimalizált matematikai transzformációkat tesz lehetővé a háttérben.
-    \item \textbf{Matplotlib:} A kinyert reprezentációk – hullámformák, burkológörbék, valamint a hőtérképként megjelenő log-mel spektrogramok – vizualizálásának alapvető keretrendszere, amelyet gyakran a Librosa saját, \texttt{specshow} nevű megjelenítő moduljával együttesen alkalmazunk a tengelyek (idő és frekvencia) helyes szinkronizálása érdekében.
-\end{itemize}
+Nem állítom, hogy a 2D CNN minden alternatívánál általánosan jobb. Egy SVM vagy más klasszikus modell használható lehet kézzel aggregált jellemzővektorokon, egy MLP viszont a spektrogram kilapításával elveszítené a lokális szerkezetet. Az 1D CNN inkább nyers hullámformán vagy időbeli jellemzősorozaton természetes, a CRNN pedig erősebb időbeli modellezést adhat, de összetettebb és több magyarázati terhet jelent. A saját rendszerben a 2D CNN ezért arányos kompromisszum: illeszkedik a log-Mel bemenethez, kezelhető méretű, és valós időben is futtatható.
+
+\section{Hangszercsaládok akusztikai szemléltetése}
+\label{subsec:hangszercsaladok}
+
+A rendszer nem egyedi hangszereket, hanem hangszercsaládokat különít el. Ez a döntés akusztikailag is indokolható: az egy családba tartozó hangszerek azonos vagy hasonló hangkeltési elvük miatt rokon időbeli és spektrális mintázatokat mutathatnak. A kis adathalmaz és a valós idejű cél miatt ez a csoportosítás védhetőbb, mint sok különálló hangszerosztály kezelése.
+
+\begin{table}[H]
+\centering
+\caption{A rendszerben használt hangszercsaládok és jellegzetes hullámformáik}
+\label{tab:instrument_families}
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.02}
+\newcommand{\waveformcell}[1]{\includegraphics[width=\linewidth,height=0.72cm,keepaspectratio]{#1}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{1.55cm}
+                >{\raggedright\arraybackslash}p{2.15cm}
+                >{\raggedright\arraybackslash}p{2.35cm}
+                >{\raggedright\arraybackslash}p{4.35cm}
+                >{\centering\arraybackslash}p{2.20cm}@{}}
+\toprule
+\textbf{Osztály} & \textbf{Példák} & \textbf{Hangkeltés} & \textbf{Jelleg} & \textbf{Hullámforma} \\
+\midrule
+Gitár & Akusztikus, elektromos gitár & Húr pengetése & Gyors attack, majd lecsengő rezgés. & \waveformcell{fig_table_guitar.png} \\
+\midrule
+Zongora & Zongora, e-piano & Kalapács által leütött húr & Impulzusszerű kezdet, hosszabb lecsengés. & \waveformcell{fig_table_piano.png} \\
+\midrule
+Vokál & Énekhang, torokének & Hangszálak rezgése & Kváziperiodikus jel, formánsokkal. & \waveformcell{fig_table_vocal.png} \\
+\midrule
+Vonós & Hegedű, brácsa, cselló, nagybőgő & Vonó és húr súrlódása & Kitartott, folytonos gerjesztés. & \waveformcell{fig_table_string.png} \\
+\midrule
+Nádfúvós & Klarinét, szaxofon, oboa, fagott & Nád rezgése & Kitartott, periodikus, rezonáns jel. & \waveformcell{fig_table_reed.png} \\
+\midrule
+Rézfúvós & Trombita, harsona, kürt, tuba & Ajkak rezgése fúvókán & Erős harmonikus szerkezet, nagy energia. & \waveformcell{fig_table_brass.png} \\
+\midrule
+Zaj/Csend & Környezeti zajok & Véletlenszerű rezgések & Aperiodikus, rendszertelen jel. & \waveformcell{fig_table_noise.png} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table}
+
+A táblázatban hosszabb hullámforma-részletek szerepelnek, mert ezeken jól látszik a hang felfutása és lecsengése. Emellett kontrollált, közeli példákat is készítettem az \texttt{asd/} mappában található hangmintákból. A legtöbb hangszer esetében A4 hangot használtam, a nagybőgő és a tuba esetében A3-at, mert ezeknél ez természetesebb regiszter. Ezek az ábrák nem tanítóadatok, hanem szemléltető példák: a periódus belső alakjára és a családon belüli hasonlóságokra nagyítanak rá.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig_asd_waveforms_solo.png}
+    \footnotesize (a) Gitár, zongora és vokál
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig_asd_waveforms_string.png}
+    \footnotesize (b) Vonós hangszerek
+\end{minipage}
+
+\vspace{0.4cm}
+
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig_asd_waveforms_reed.png}
+    \footnotesize (c) Nádfúvós hangszerek
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{fig_asd_waveforms_brass.png}
+    \footnotesize (d) Rézfúvós hangszerek
+\end{minipage}
+\caption{Kontrollált A4/A3 referenciahangok 20 ms-os nagyított hullámforma-részletei. A cél nem a hangerő, hanem a periodicitás és a jelalak családonkénti szemléltetése.}
+\label{fig:asd_waveforms_summary}
+\end{figure}
+
+\section{Validációs kockázatok: leakage, domain shift, domain adaptation}
+\label{sec:adatszivargas_elmelet}
+
+Gépi tanulási rendszereknél a kiértékelés egyik legfontosabb kockázata az adatszivárgás, vagyis amikor a modell a tanítás során olyan információhoz jut, amely a valós használat során nem lenne elérhető. Audio esetén ez különösen könnyen előfordulhat, mert egy hosszabb felvétel egymáshoz közeli szeletei nagyon hasonlóak lehetnek. Ha ezek egyszerre kerülnek train és test halmazba, a modell túl optimista eredményt adhat.
+
+A dolgozat szempontjából három leakage-típust érdemes kiemelni. A \textbf{train-test kontamináció} akkor jelenik meg, ha nagyon hasonló vagy azonos minták kerülnek különböző splitbe. Az \textbf{előfeldolgozási leakage} akkor fordul elő, ha például normalizálási paramétereket a teljes adathalmazból számolunk, majd azokat a tesztadatokra is alkalmazzuk. Az \textbf{augmentációs leakage} pedig akkor veszélyes, ha egy eredeti minta az egyik, annak torzított változata pedig egy másik halmazba kerül.
+
+A valós idejű mikrofonos felismerésnél emellett megjelenik a \textbf{domain shift} is. Ez azt jelenti, hogy a tanítási környezet és a célkörnyezet eloszlása eltér: a tiszta internetes vagy stúdiószerű hangok másképp viselkednek, mint a telefonról visszajátszott és laptopmikrofonnal rögzített minták. A \textbf{domain adaptation} ennek kezelésére szolgál: a célkörnyezetből származó mikrofonos train minták bevonásával a modell jobban alkalmazkodhat ahhoz az akusztikai helyzethez, amelyben később működnie kell.
+
+Ezek miatt a későbbi kísérletekben a train, validation és test halmazokat külön szerepben kezelem. A validáció a modellválasztásra szolgál, a test halmaz pedig csak a kiválasztott végső modellek utolsó ellenőrzésére. Így a mérési eredmények nem rekordpontosságként, hanem kontrollált, módszertanilag védhető összehasonlításként értelmezhetők.

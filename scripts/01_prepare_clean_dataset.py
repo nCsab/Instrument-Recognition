@@ -1,176 +1,152 @@
 import os
 import random
-import shutil
 import re
+import shutil
+
 import librosa
 import soundfile as sf
-import numpy as np
 
-OWNDATASET_DIR = "/Users/csabanagy/Desktop/project/owndataset"
-OUTPUT_DIR = "/Users/csabanagy/Desktop/project/dataset_clean"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+OWNDATASET_DIR = os.path.join(PROJECT_ROOT, "owndataset")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "dataset_clean")
+
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 SR = 16000
 BLOCK_DURATION = 5.0
 CLIP_DURATION = 1.0
-
 TRAIN_RATIO = 0.70
 VAL_RATIO = 0.15
-TEST_RATIO = 0.15
 
 
-def get_audio_files(directory):
-    if not os.path.exists(directory): return []
-    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.wav')]
+def wav_files(path):
+    if not os.path.exists(path):
+        return []
+    return sorted(os.path.join(path, name) for name in os.listdir(path) if name.endswith(".wav"))
 
 
-def get_group_id(filename):
+def source_prefix(cls, filename):
+    if cls != "noise":
+        parts = filename.split("_block")
+        return parts[0] if len(parts) > 1 else cls
+    if filename.startswith("esc50_"):
+        return "esc50_noise"
+    if filename.startswith("silence_"):
+        return "silence"
+    return "noise" if filename.startswith("noise_") else "other"
+
+
+def group_blocks(cls, blocks):
+    groups = {}
+    for block in blocks:
+        prefix = source_prefix(cls, os.path.basename(block))
+        groups.setdefault(prefix, []).append(block)
+    return groups
+
+
+def split_blocks(groups):
+    train, val, test = [], [], []
+    random.seed(42)
+    for prefix, blocks in groups.items():
+        random.shuffle(blocks)
+        n_train = int(len(blocks) * TRAIN_RATIO)
+        n_val = int(len(blocks) * VAL_RATIO)
+        train += blocks[:n_train]
+        val += blocks[n_train:n_train + n_val]
+        test += blocks[n_train + n_val:]
+        print(f"  {prefix}: {len(blocks)} blocks -> Train={n_train}, Val={n_val}, Test={len(blocks) - n_train - n_val}")
+    return {"train": train, "val": val, "test": test}
+
+
+def write_clips(block_path, output_dir, prefix, group_id):
+    audio, _ = librosa.load(block_path, sr=SR)
+    clip_len = int(CLIP_DURATION * SR)
+    max_clips = int(BLOCK_DURATION / CLIP_DURATION)
+    for index in range(min(len(audio) // clip_len, max_clips)):
+        start = index * clip_len
+        clip = audio[start:start + clip_len]
+        out_name = f"{prefix}_group{group_id}_clip{index:02d}.wav"
+        sf.write(os.path.join(output_dir, out_name), clip, SR)
+
+
+def build_class(cls):
+    print(f"\nProcessing: {cls}...")
+    blocks = wav_files(os.path.join(OWNDATASET_DIR, "instruments", cls))
+    if not blocks:
+        print(f"Error: no 5s blocks found for {cls}")
+        return
+
+    groups = group_blocks(cls, blocks)
+    split_map = split_blocks(groups)
+    print(f"Total blocks ({len(blocks)}): Train={len(split_map['train'])}, Val={len(split_map['val'])}, Test={len(split_map['test'])}")
+
+    class_dir = os.path.join(OUTPUT_DIR, cls)
+    if os.path.exists(class_dir):
+        shutil.rmtree(class_dir)
+    for split in split_map:
+        os.makedirs(os.path.join(class_dir, split), exist_ok=True)
+
+    group_id = 1
+    for split, split_blocks_list in split_map.items():
+        split_dir = os.path.join(class_dir, split)
+        for block in split_blocks_list:
+            write_clips(block, split_dir, f"{cls}_clean", group_id)
+            group_id += 1
+
+
+def group_id(filename):
     match = re.search(r"group\d+", filename)
     return match.group(0) if match else None
 
 
-def slice_and_save(block_path, dest_dir, prefix, group_id):
-    y, _ = librosa.load(block_path, sr=SR)
-    clip_samples = int(CLIP_DURATION * SR)
-    num_clips = min(len(y) // clip_samples, int(BLOCK_DURATION / CLIP_DURATION))
-
-    saved_paths = []
-    for i in range(num_clips):
-        start = i * clip_samples
-        clip = y[start:start + clip_samples]
-        out_name = f"{prefix}_group{group_id}_clip{i:02d}.wav"
-        out_path = os.path.join(dest_dir, out_name)
-        sf.write(out_path, clip, SR)
-        saved_paths.append(out_path)
-    return saved_paths
+def files_by_group(*dirs):
+    groups = {}
+    for directory in dirs:
+        for name in os.listdir(directory):
+            if not name.endswith(".wav"):
+                continue
+            gid = group_id(name)
+            if gid:
+                groups.setdefault(gid, {"dir": directory, "files": []})["files"].append(name)
+    return sorted(groups.values(), key=lambda item: len(item["files"]), reverse=True)
 
 
-def process_class(cls):
-    print(f"\nProcessing: {cls}...")
-
-    clean_blocks_dir = os.path.join(OWNDATASET_DIR, "instruments", cls)
-    clean_blocks = get_audio_files(clean_blocks_dir)
-    clean_blocks.sort()
-
-    if not clean_blocks:
-        print(f"Error: no 5s blocks in {clean_blocks_dir}")
-        return
-
-    blocks_by_prefix = {}
-    for block in clean_blocks:
-        basename = os.path.basename(block)
-        if cls == "noise":
-            if basename.startswith("esc50_"): prefix = "esc50_noise"
-            elif basename.startswith("silence_"): prefix = "silence"
-            elif basename.startswith("noise_"): prefix = "noise"
-            else: prefix = "other"
-        else:
-            parts = basename.split("_block")
-            prefix = parts[0] if len(parts) > 1 else cls
-        blocks_by_prefix.setdefault(prefix, []).append(block)
-
-    train_blocks, val_blocks, test_blocks = [], [], []
-    random.seed(42)
-
-    # A noise osztályban most már pontosan a kívánt 240 db fizikailag tisztított fájl van,
-    # így mindet felhasználhatjuk anélkül, hogy lekorlátoznánk 100-ra.
-    if cls == "noise":
-        pass # Nem kell vágni, mehet az összes blokk
-
-    for prefix, blocks in blocks_by_prefix.items():
-        random.shuffle(blocks)
-        n = len(blocks)
-        n_train = int(n * TRAIN_RATIO)
-        n_val = int(n * VAL_RATIO)
-
-        # A pontos 70/15/15 eloszlás érdekében manuális kerekítés korrekció
-        # De az int() általában a teszt halmaznak hagyja meg a maradékot, ami pont jó.
-        
-        train_blocks.extend(blocks[:n_train])
-        val_blocks.extend(blocks[n_train:n_train + n_val])
-        test_blocks.extend(blocks[n_train + n_val:])
-
-        print(f"  {prefix}: {n} blocks -> Train={n_train}, Val={n_val}, Test={n - n_train - n_val}")
-
-    print(f"Total blocks ({sum(len(b) for b in blocks_by_prefix.values())}): Train={len(train_blocks)}, Val={len(val_blocks)}, Test={len(test_blocks)}")
-
-    cls_out_dir = os.path.join(OUTPUT_DIR, cls)
-    if os.path.exists(cls_out_dir):
-        shutil.rmtree(cls_out_dir)
-
-    train_dir = os.path.join(cls_out_dir, "train")
-    val_dir = os.path.join(cls_out_dir, "val")
-    test_dir = os.path.join(cls_out_dir, "test")
-    for d in [train_dir, val_dir, test_dir]:
-        os.makedirs(d, exist_ok=True)
-
-    group_idx = 1
-    for block in train_blocks:
-        slice_and_save(block, train_dir, f"{cls}_clean", group_idx); group_idx += 1
-    for block in val_blocks:
-        slice_and_save(block, val_dir, f"{cls}_clean", group_idx); group_idx += 1
-    for block in test_blocks:
-        slice_and_save(block, test_dir, f"{cls}_clean", group_idx); group_idx += 1
-
-
-def balance_class(cls):
+def rebalance_val_test(cls):
     val_dir = os.path.join(OUTPUT_DIR, cls, "val")
     test_dir = os.path.join(OUTPUT_DIR, cls, "test")
-
     if not os.path.exists(val_dir) or not os.path.exists(test_dir):
-        print(f"Error: {cls} - val or test directory not found.")
         return
 
-    val_files = [f for f in os.listdir(val_dir) if f.endswith('.wav')]
-    test_files = [f for f in os.listdir(test_dir) if f.endswith('.wav')]
-    initial_val, initial_test = len(val_files), len(test_files)
+    before = (len(wav_files(val_dir)), len(wav_files(test_dir)))
+    targets = {val_dir: [], test_dir: []}
+    counts = {val_dir: 0, test_dir: 0}
 
-    blocks = {}
-    for f in val_files:
-        gid = get_group_id(f)
-        if gid:
-            blocks.setdefault(gid, {"current_dir": val_dir, "files": []})["files"].append(f)
-    for f in test_files:
-        gid = get_group_id(f)
-        if gid:
-            blocks.setdefault(gid, {"current_dir": test_dir, "files": []})["files"].append(f)
-
-    sorted_blocks = sorted(blocks.items(), key=lambda x: len(x[1]["files"]), reverse=True)
-
-    new_val, new_test = [], []
-    val_count, test_count = 0, 0
-
-    for gid, info in sorted_blocks:
-        n = len(info["files"])
-        if val_count <= test_count:
-            new_val.append((gid, info)); val_count += n
-        else:
-            new_test.append((gid, info)); test_count += n
+    for group in files_by_group(val_dir, test_dir):
+        target_dir = val_dir if counts[val_dir] <= counts[test_dir] else test_dir
+        targets[target_dir].append(group)
+        counts[target_dir] += len(group["files"])
 
     moved = 0
-    for _, info in new_val:
-        if info["current_dir"] == test_dir:
-            for f in info["files"]:
-                shutil.move(os.path.join(test_dir, f), os.path.join(val_dir, f)); moved += 1
-    for _, info in new_test:
-        if info["current_dir"] == val_dir:
-            for f in info["files"]:
-                shutil.move(os.path.join(val_dir, f), os.path.join(test_dir, f)); moved += 1
+    for target_dir, groups in targets.items():
+        for group in groups:
+            if group["dir"] == target_dir:
+                continue
+            for name in group["files"]:
+                shutil.move(os.path.join(group["dir"], name), os.path.join(target_dir, name))
+                moved += 1
 
-    print(f"{cls:<10} | Before: Val={initial_val:<3} Test={initial_test:<3} | After: Val={val_count:<3} Test={test_count:<3} | Moved: {moved}")
+    print(f"{cls:<10} | Before: Val={before[0]:<3} Test={before[1]:<3} | After: Val={counts[val_dir]:<3} Test={counts[test_dir]:<3} | Moved: {moved}")
 
 
 def main():
-    if os.path.exists(OUTPUT_DIR):
-        for cls in CLASSES:
-            d = os.path.join(OUTPUT_DIR, cls)
-            if os.path.exists(d): shutil.rmtree(d, ignore_errors=True)
-
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     for cls in CLASSES:
-        process_class(cls)
+        build_class(cls)
 
     print("\nBALANCING VAL/TEST SETS (BLOCK-LEVEL)\n")
     for cls in CLASSES:
-        balance_class(cls)
-    
+        rebalance_val_test(cls)
+
+
 if __name__ == "__main__":
     main()

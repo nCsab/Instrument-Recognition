@@ -1,192 +1,174 @@
 import os
-import random
-import time
-import shutil
 import re
-import sounddevice as sd
-import soundfile as sf
+import shutil
+import time
+
 import librosa
 import numpy as np
+import sounddevice as sd
+import soundfile as sf
 
-# Config
-BASE_DIR = "/Users/csabanagy/Desktop/project/dataset_clean"
-TO_RECORD_DIR = "/Users/csabanagy/Desktop/project/owndataset/record"
-OUTPUT_DIR = "/Users/csabanagy/Desktop/project/owndataset/record"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+BASE_DIR = os.path.join(PROJECT_ROOT, "dataset_clean")
+RECORD_DIR = os.path.join(PROJECT_ROOT, "owndataset", "record")
+
 CATEGORIES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
+SPLITS = ["train", "val", "test"]
 SR = 16000
-SLICE_DURATION = 1.0
+CLIP_SECONDS = 1.0
+GAP_SECONDS = 0.2
 
 
-def create_beep(duration_s, freq=440, sr=16000):
-    t = np.linspace(0, duration_s, int(sr * duration_s), endpoint=False)
+def natural_key(name):
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", name)]
+
+
+def record_path(split, *parts):
+    return os.path.join(RECORD_DIR, split, *parts)
+
+
+def selected_splits():
+    value = input("Split (train/val/test/all): ").strip().lower()
+    return [value] if value in SPLITS else SPLITS
+
+
+def beep(seconds=1.0, freq=440.0):
+    t = np.linspace(0, seconds, int(SR * seconds), endpoint=False)
     return 0.5 * np.sin(2 * np.pi * freq * t)
 
 
+def clean_files(category, split):
+    folder = os.path.join(BASE_DIR, category, split)
+    if not os.path.exists(folder):
+        return []
+    files = [name for name in os.listdir(folder) if name.endswith(".wav") and "clean" in name]
+    return [os.path.join(folder, name) for name in sorted(files, key=natural_key)]
+
+
 def prepare_files():
-    # Referencia lejátszási fájlok előkészítése (összefűzés)
-    print("\nPreparing reference playback files...")
-    os.makedirs(TO_RECORD_DIR, exist_ok=True)
+    print("\nPreparing playback files...")
+    for split in SPLITS:
+        playback_dir = record_path(split, "playback")
+        os.makedirs(playback_dir, exist_ok=True)
+        print(f"\nSplit: {split}")
 
-    for cat in CATEGORIES:
-        cat_dir = os.path.join(BASE_DIR, cat, "train")
-        if not os.path.exists(cat_dir):
-            print(f"Warning: {cat_dir} not found.")
-            continue
+        for category in CATEGORIES:
+            files = clean_files(category, split)
+            if not files:
+                print(f"  {category}: no files")
+                continue
 
-        # A clean (tiszta) fájlok betöltése az adott kategóriából
-        files = [f for f in os.listdir(cat_dir) if f.endswith(".wav") and "clean" in f]
-        # Természetes (Natural) ABC sorrendbe rendezzük (hogy a group10 ne a group1 után jöjjön, hanem a group9 után)
-        files.sort(key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x)])
+            audio = [beep(), np.zeros(SR)]
+            for file_path in files:
+                data, _ = sf.read(file_path)
+                audio += [data, np.zeros(int(SR * GAP_SECONDS))]
 
-        if not files:
-            print(f"Warning: no clean files in {cat_dir}.")
-            continue
+            output = os.path.join(playback_dir, f"{category}_for_mic.wav")
+            sf.write(output, np.concatenate(audio), SR)
+            print(f"  {category}: {len(files)} clips -> {output}")
 
-        # Egy csippanással (beep) kezdünk, majd a fájlok közé 0.2s csendet teszünk
-        combined_audio = [create_beep(1.0, sr=SR), np.zeros(SR)]
-        for f in files:
-            data, _ = sf.read(os.path.join(cat_dir, f))
-            combined_audio.append(data)
-            combined_audio.append(np.zeros(int(SR * 0.2)))
 
-        sf.write(os.path.join(TO_RECORD_DIR, f"{cat}_for_mic.wav"), np.concatenate(combined_audio), SR)
-        print(f"  {cat}: {len(files)} samples concatenated -> {cat}_for_mic.wav")
+def record_one(split, category):
+    playback_file = record_path(split, "playback", f"{category}_for_mic.wav")
+    recorded_dir = record_path(split, "recorded")
+    os.makedirs(recorded_dir, exist_ok=True)
+
+    duration = 300.0
+    if os.path.exists(playback_file):
+        info = sf.info(playback_file)
+        duration = (info.frames / info.samplerate) + 5.0
+
+    input(f"\nPress Enter to record {split.upper()} / {category.upper()}")
+    print(f"Recording for {duration:.1f}s...")
+    recording = sd.rec(int(duration * SR), samplerate=SR, channels=1)
+
+    start_time = time.time()
+    try:
+        while sd.get_stream().active:
+            elapsed = time.time() - start_time
+            print(f"\r  {int(elapsed)//60:02d}:{int(elapsed)%60:02d} / {int(duration)//60:02d}:{int(duration)%60:02d}", end="", flush=True)
+            time.sleep(1)
+        print()
+    except KeyboardInterrupt:
+        sd.stop()
+        print("\nRecording stopped early.")
+
+    output = os.path.join(recorded_dir, f"{category}_recorded.wav")
+    sf.write(output, recording, SR)
+    print(f"Saved: {output}")
 
 
 def record_mic():
-    # Interaktív felvételkészítés mikrofonon keresztül
     print("\nInteractive microphone recorder")
-    print("-" * 40)
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    for cat in CATEGORIES:
-        input(f"\nPress Enter to start recording: {cat.upper()}")
-        print(f"Recording {cat}...")
-
-        try:
-            playback_file = os.path.join(TO_RECORD_DIR, f"{cat}_for_mic.wav")
-            if os.path.exists(playback_file):
-                # Kiszámítjuk a fájl hosszát, és ráhagyunk +5 másodpercet
-                info = sf.info(playback_file)
-                playback_duration = info.frames / info.samplerate
-                duration = playback_duration + 5.0
-                print(f"Playback length: {playback_duration:.1f}s, recording for {duration:.1f}s...")
-            else:
-                duration = 300
-                print(f"Warning: playback file not found, defaulting to {duration}s.")
-
-            recording = sd.rec(int(duration * SR), samplerate=SR, channels=1)
-
-            print("Recording... Press Ctrl+C to stop early.")
-            try:
-                # Folyamatjelző megjelenítése
-                start_time = time.time()
-                while sd.get_stream().active:
-                    elapsed = time.time() - start_time
-                    remaining = max(0, duration - elapsed)
-                    print(f"\r  {int(elapsed)//60:02d}:{int(elapsed)%60:02d} / "
-                          f"{int(duration)//60:02d}:{int(duration)%60:02d}", end="", flush=True)
-                    time.sleep(1)
-                print()
-            except KeyboardInterrupt:
-                sd.stop()
-                print("\n\nRecording stopped early.")
-
-            out_path = os.path.join(OUTPUT_DIR, f"{cat}_recorded.wav")
-            sf.write(out_path, recording, SR)
-            print(f"Saved: {out_path}")
-
-        except Exception as e:
-            print(f"\nError: {e}")
-
-    print("\nAll categories recorded.")
+    for split in selected_splits():
+        for category in CATEGORIES:
+            record_one(split, category)
 
 
-def find_beep_end(y, sr, freq=440.0):
-    # Csippanás megkeresése spektrumanalízissel (STFT)
-    # Sokkal megbízhatóbb, mert konkrétan a 440 Hz-es frekvenciát figyeli, nem csak a hangerőt
-    n_fft = 2048
-    hop_length = 512
-    D = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop_length))
-
-    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-    bin_idx = np.argmin(np.abs(freqs - freq))
-    energy = D[bin_idx, :]
-
+def find_beep_end(audio, freq=440.0):
+    spectrum = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512))
+    freqs = librosa.fft_frequencies(sr=SR, n_fft=2048)
+    energy = spectrum[np.argmin(np.abs(freqs - freq))]
     if np.max(energy) == 0:
         return 0
-    energy = energy / np.max(energy)
 
+    energy = energy / np.max(energy)
     above = np.where(energy > 0.5)[0]
     if len(above) == 0:
         return 0
 
-    start_frame = above[0]
-    below = np.where(energy[start_frame:] < 0.2)[0]
-    end_frame = start_frame + below[0] if len(below) > 0 else len(energy) - 1
-
-    return end_frame * hop_length
+    below = np.where(energy[above[0]:] < 0.2)[0]
+    end_frame = above[0] + below[0] if len(below) else len(energy) - 1
+    return end_frame * 512
 
 
-def slice_audio(cat):
-    # Felvett fájlok darabolása az eredeti 1s szeletekre
-    file_path = os.path.join(OUTPUT_DIR, f"{cat}_recorded.wav")
-    if not os.path.exists(file_path):
-        print(f"Not found: {file_path}")
+def slice_audio(split, category):
+    source = record_path(split, "recorded", f"{category}_recorded.wav")
+    if not os.path.exists(source):
+        print(f"Not found: {source}")
         return
 
-    print(f"Slicing: {cat}")
-    y, _ = librosa.load(file_path, sr=SR)
+    audio, _ = librosa.load(source, sr=SR)
+    start = find_beep_end(audio) + SR
+    step = int((CLIP_SECONDS + GAP_SECONDS) * SR)
+    clip_len = int(CLIP_SECONDS * SR)
+    output_dir = record_path(split, "slices", f"{category}_mic_1sec")
 
-    # Csippanás megkeresése, hogy onnan indítsuk a szinkronizálást
-    beep_end = find_beep_end(y, SR)
-    print(f"  Beep end: {beep_end / SR:.2f}s")
-
-    output_dir = os.path.join(OUTPUT_DIR, f"{cat}_mic_1sec")
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
 
-    slice_samples = int(SLICE_DURATION * SR)
-    step_samples = int(1.2 * SR)  # 1.0s clip + 0.2s gap
-    start = beep_end + int(1.0 * SR)
     count = 0
-
-    while start + slice_samples <= len(y):
-        chunk = y[start:start + slice_samples]
-        sf.write(os.path.join(output_dir, f"{cat}_mic_{count:04d}.wav"), chunk, SR)
+    while start + clip_len <= len(audio):
+        clip = audio[start:start + clip_len]
+        sf.write(os.path.join(output_dir, f"{category}_mic_{count:04d}.wav"), clip, SR)
+        start += step
         count += 1
-        start += step_samples
-
-    print(f"  {count} slices saved.")
+    print(f"{split}/{category}: {count} slices")
 
 
 def slice_all():
-    print("\nSlicing all recorded files...")
-    for cat in CATEGORIES:
-        slice_audio(cat)
-    print("Done.\n")
+    for split in selected_splits():
+        for category in CATEGORIES:
+            slice_audio(split, category)
 
 
 def main():
-    # Főmenü megjelenítése
     print("\nMICROPHONE DATA ACQUISITION PIPELINE\n")
-    print("1. Prepare reference files (concatenate clean data)")
-    print("2. Record mic audio interactively")
-    print("3. Slice recorded audio into 1-second segments")
-    print("q. Quit")
-    choice = input("\nSelect an option: ").strip().lower()
+    print("1. Prepare playback files")
+    print("2. Record microphone audio")
+    print("3. Slice recorded audio")
+    choice = input("Select an option (or q): ").strip().lower()
 
-    if choice == '1':
+    if choice == "1":
         prepare_files()
-    elif choice == '2':
+    elif choice == "2":
         record_mic()
-    elif choice == '3':
+    elif choice == "3":
         slice_all()
-    elif choice == 'q':
-        print("Exiting...")
     else:
-        print("Invalid choice.")
+        print("Exiting...")
 
 
 if __name__ == "__main__":

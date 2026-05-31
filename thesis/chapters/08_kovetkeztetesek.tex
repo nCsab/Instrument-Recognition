@@ -1,5 +1,12 @@
 \chapter{Következtetések}
 
+A dolgozat végére érve a célom nem egy rekordpontosságú, minden helyzetben
+hibátlan hangszerfelismerő rendszer bemutatása volt, hanem egy végigvezetett,
+mérhető és valós időben is kipróbálható mérnöki prototípus elkészítése. Ebben
+a fejezetben ezért röviden összefoglalom, mit valósítottam meg, hogyan
+viszonyul a rendszer a hasonló megközelítésekhez, és merre lehetne továbbvinni
+a munkát.
+
 \section{Megvalósítások}
 Megtervezni és megközelíteni egy, a cél szempontjából tökéletes, alacsony mintaszámú zenei adathalmazt szinte lehetetlen. Azonban egy igazán jót is kihívás, nem beszélve az osztályozó modell és a jellemzőkinyerő megválasztásáról és integrálásáról. Számomra igazi kihívást jelentett a rendszer élesítése. Már csak a minták kiválogatása alatt rengeteg szép hangszeres játékkal találtam szemben magam, ami csak emelte a munka iránti ambíciómat. Bár egy ilyen projekt sosincs kész, mindig van, amit javítani rajta, az eredmény minden kisebb-nagyobb hibája ellenére elégedettséggel tölt el, és büszkén foglal helyet a portfóliómban.
 
@@ -13,9 +20,9 @@ A munka során elért legfontosabb elméleti és gyakorlati megvalósítások az
 \end{itemize}
 
 \section{Hasonló rendszerekkel való összehasonlítás}
-A legtöbb hasonló hangszerfelismerő rendszer a szakirodalomban elég komplex modellekre épül, mint a ResNet vagy a CRNN. Ezeket általában hatalmas adathalmazokon tesztelik (mint az IRMAS vagy az NSynth), és bár jól megbirkóznak a polifón zenékkel, de elképesztően nagy a számítási igényük, így egy átlagos számítógépen szinte esélytelen őket valós időben futtatni.
+A \ref{sec:hasonlo_alkalmazasok}.~szakaszban bemutatott kapcsolódó munkákhoz képest a saját rendszerem nem a legnagyobb lehetséges adathalmazt vagy a legerősebb neurális architektúrát célozta meg. A szakirodalomban gyakoriak a nagyobb, polifón zenei anyagokra épülő rendszerek, illetve az olyan előtanított vagy mélyebb modellek, amelyek erős általánosító képességet adhatnak, de a fejlesztési és futtatási környezetük is összetettebb. Ezzel szemben én egy kisebb, átláthatóbb, saját adatgyűjtésre épülő rendszert készítettem, ahol a módszertani kérdések -- például az augmentáció, a mikrofonos domain shift és a végső testelés -- kézben tarthatók és védhetően dokumentálhatók.
 
-Az én rendszerem ehhez képest egy sokkal könnyebb 2D CNN modellel dolgozik, amit kifejezetten a 7 hangszerosztályra alakítottam ki, bár a betanításához még így is a Google Colab felhőalapú erőforrásaira volt szükség. A mikrofonos, valós idejű predikció és a csúszóablakos simítás viszont már stabil és szinte azonnali felismerést ad helyben egy egyszerű laptopon is. Bár tény, hogy a bonyolult zenekari polifóniával szemben ez a modell inkább csak az egyedi hangokra és kisebb zajokra jó, cserébe viszont egyáltalán nem terheli le a gépet és azonnal válaszol, ami a gyakorlatban sokkal használhatóbbá teszi.
+A saját Log-Mel + 2D CNN modell legfontosabb előnye nem az, hogy minden mérőszámban felülmúlja a transfer learning megközelítést, hanem az, hogy teljes feldolgozási láncként saját kézben van: a hanggyűjtéstől a jellemzőkinyerésen át a valós idejű predikcióig. A YAMNet-alapú összehasonlítás megmutatta, hogy az előtanított embedding erősebb kiindulópont lehet, de a saját modell is értelmezhető, futtatható és a dolgozat céljához illeszkedő megoldást ad. A rendszer tehát nem ipari szintű, általános hangszerfelismerő szolgáltatásként értékelendő, hanem egy BSc szintű, végigvezetett mérnöki prototípusként, amelyben a döntések és a korlátok is világosan követhetők.
 
 \section{Továbbfejlesztési lehetőségek}
 A rendszerben számtalan továbbfejlesztési lehetőség adott. Elsősorban a kutatás továbbvihető a zajos monofón felismeréstől a tiszta polifón hangszerfelismerés irányába. Ebben az esetben a meglévő softmax aktivációs függvényt sigmoidra kellene cserélnünk a kimeneti rétegen, és többcímkés (multi-label) osztályozást kellene alkalmaznunk, hiszen egyszerre több hangszer is megszólalhat. Ehhez azonban az eddiginél még sokkal több adatra lenne szükség, amelyet szintén az internetről gyűjthet össze az ember, vagy mesterségesen, két különálló hangszer hangját egy szkript segítségével összekeverve állíthat elő.

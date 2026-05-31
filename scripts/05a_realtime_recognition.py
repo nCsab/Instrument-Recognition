@@ -1,117 +1,65 @@
+import glob
 import os
-import sys
 import queue
-import numpy as np
-import tensorflow as tf
-import sounddevice as sd
-import librosa
+import sys
 from collections import deque
-from utils.feature_utils import extract_log_mel
 
-MODEL_TYPE = 'mic'  # Change to 'clean' to use clean dataset model
-MODEL_PATH = f"/Users/csabanagy/Desktop/project/models_{MODEL_TYPE}/best_log_mel_2dcnn_model.keras"
+import numpy as np
+import sounddevice as sd
+import tensorflow as tf
+
+from utils.feature_utils import extract_log_mel, normalize_db_feature
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+MODEL_TYPE = "exp_final"  # Pl.: exp_clean, exp_augmented, exp_final
+MODEL_DIR = os.path.join(PROJECT_ROOT, "models", MODEL_TYPE)
+CHECKPOINT_NAME = None  # None esetén a legfrissebb log_mel checkpointot választja.
+
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
+CLASS_COLORS = {
+    "guitar": "\033[93m",
+    "piano": "\033[97;40m",
+    "vocal": "\033[96m",
+    "string": "\033[38;5;88m",
+    "reed": "\033[38;5;208m",
+    "brass": "\033[33m",
+    "noise": "\033[90m",
+}
+RESET_COLOR = "\033[0m"
 
 SR = 16000
-WINDOW_DURATION = 1.0
-STEP_DURATION = 0.25
+WINDOW_SECONDS = 1.0
+STEP_SECONDS = 0.25
 INPUT_SHAPE = (128, 63, 1)
-
 SMOOTHING_WINDOW = 6
 HYSTERESIS_BONUS = 0.05
 THRESHOLDS = {"noise": 0.20, "default": 0.45}
-
-CLASS_COLORS = {
-    "guitar": "\033[93m",
-    "piano":  "\033[97;40m",
-    "vocal":  "\033[96m",
-    "string": "\033[38;5;88m",
-    "reed":   "\033[38;5;208m",
-    "brass":  "\033[33m",
-    "noise":  "\033[90m",
-}
-RESET_COLOR = "\033[0m"
 
 audio_q = queue.Queue()
 
 
 class SpecAugment(tf.keras.layers.Layer):
-    def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, **kwargs):
+    def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, apply_freq_mask=True, **kwargs):
         super().__init__(**kwargs)
         self.freq_mask_param = freq_mask_param
         self.time_mask_param = time_mask_param
         self.num_masks = num_masks
+        self.apply_freq_mask = apply_freq_mask
 
     def call(self, inputs, training=None):
-        if not training:
-            return inputs
-        augmented = inputs
-        freq_dim = tf.shape(inputs)[1]
-        time_dim = tf.shape(inputs)[2]
-        for _ in range(self.num_masks):
-            f = tf.random.uniform([], 1, self.freq_mask_param, dtype=tf.int32)
-            f = tf.minimum(f, freq_dim)
-            f0 = tf.random.uniform([], 0, freq_dim - f, dtype=tf.int32)
-            indices = tf.range(freq_dim)
-            freq_mask = tf.cast(tf.logical_or(indices < f0, indices >= f0 + f), tf.float32)
-            augmented = augmented * tf.reshape(freq_mask, [1, -1, 1, 1])
-
-            t = tf.random.uniform([], 1, self.time_mask_param, dtype=tf.int32)
-            t = tf.minimum(t, time_dim)
-            t0 = tf.random.uniform([], 0, time_dim - t, dtype=tf.int32)
-            indices_t = tf.range(time_dim)
-            time_mask = tf.cast(tf.logical_or(indices_t < t0, indices_t >= t0 + t), tf.float32)
-            augmented = augmented * tf.reshape(time_mask, [1, 1, -1, 1])
-        return augmented
+        return inputs
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            'freq_mask_param': self.freq_mask_param,
-            'time_mask_param': self.time_mask_param,
-            'num_masks': self.num_masks,
+            "freq_mask_param": self.freq_mask_param,
+            "time_mask_param": self.time_mask_param,
+            "num_masks": self.num_masks,
+            "apply_freq_mask": self.apply_freq_mask,
         })
         return config
-
-
-def build_model(input_shape, num_classes):
-    model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=input_shape),
-        SpecAugment(freq_mask_param=15, time_mask_param=8, num_masks=2),
-
-        tf.keras.layers.Conv2D(32, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.Conv2D(32, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.3),
-
-        tf.keras.layers.Conv2D(64, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.Conv2D(64, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.3),
-
-        tf.keras.layers.Conv2D(128, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.Conv2D(128, (3, 3), padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-
-        tf.keras.layers.GlobalAveragePooling2D(),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(num_classes, activation='softmax')
-    ])
-    return model
 
 
 def audio_callback(indata, frames, time, status):
@@ -120,85 +68,95 @@ def audio_callback(indata, frames, time, status):
     audio_q.put(indata.copy())
 
 
-def normalize_features(feat):
-    return np.clip((feat + 80.0) / (80.0 + 1e-10), 0.0, 1.0)
+def prepare_input(audio):
+    feature = extract_log_mel(audio, sr=SR)
+    target_frames = INPUT_SHAPE[1]
+    if feature.shape[1] < target_frames:
+        feature = np.pad(feature, ((0, 0), (0, target_frames - feature.shape[1])))
+    else:
+        feature = feature[:, :target_frames]
+    return normalize_db_feature(feature).reshape(1, *INPUT_SHAPE)
 
 
-def display_prediction(smoothed_probs, current_class):
-    confidence = smoothed_probs[CLASSES.index(current_class)] * 100
+def choose_class(probs, current_class):
+    adjusted = probs.copy()
+    adjusted[CLASSES.index(current_class)] += HYSTERESIS_BONUS
+    candidate = CLASSES[int(np.argmax(adjusted))]
+    if candidate == current_class:
+        return current_class
+
+    threshold = THRESHOLDS["noise"] if candidate == "noise" else THRESHOLDS["default"]
+    return candidate if probs[CLASSES.index(candidate)] >= threshold else current_class
+
+
+def display_prediction(probs, current_class):
+    confidence = probs[CLASSES.index(current_class)] * 100
+    filled = int(20 * confidence / 100)
+    bar = "\u2588" * filled + "\u2591" * (20 - filled)
     color = CLASS_COLORS.get(current_class, "")
-    bar_len = 20
-    filled = int(bar_len * (confidence / 100.0))
-    bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
 
-    output = f"\r{color}[ {bar} ] {current_class:7} ({confidence:5.1f}%){RESET_COLOR} | "
-    other_parts = []
-    for i, cls in enumerate(CLASSES):
+    others = []
+    for index, cls in enumerate(CLASSES):
         if cls != current_class:
-            c = CLASS_COLORS.get(cls, "")
-            other_parts.append(f"{c}{cls[0].upper()}:{int(smoothed_probs[i]*100)}%{RESET_COLOR}")
-    output += " ".join(other_parts) + "     "
-    sys.stdout.write(output)
+            others.append(f"{CLASS_COLORS.get(cls, '')}{cls[0].upper()}:{int(probs[index] * 100)}%{RESET_COLOR}")
+
+    sys.stdout.write(f"\r{color}[ {bar} ] {current_class:7} ({confidence:5.1f}%){RESET_COLOR} | {' '.join(others)}     ")
     sys.stdout.flush()
 
 
+def load_model():
+    if CHECKPOINT_NAME:
+        model_path = CHECKPOINT_NAME if os.path.isabs(CHECKPOINT_NAME) else os.path.join(MODEL_DIR, CHECKPOINT_NAME)
+    else:
+        checkpoints = sorted(glob.glob(os.path.join(MODEL_DIR, "*log_mel_2dcnn_*_best_model.keras")))
+        if not checkpoints:
+            checkpoints = sorted(glob.glob(os.path.join(MODEL_DIR, "best_log_mel_2dcnn_model.keras")))
+        model_path = checkpoints[-1] if checkpoints else None
+
+    if not model_path or not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found in: {MODEL_DIR}")
+    print(f"Using checkpoint: {model_path}")
+    return tf.keras.models.load_model(model_path, custom_objects={"SpecAugment": SpecAugment}, compile=False)
+
+
 def main():
-    if not os.path.exists(MODEL_PATH):
-        print(f"Model not found: {MODEL_PATH}")
+    try:
+        print("Loading model...")
+        model = load_model()
+    except Exception as error:
+        print(error)
         return
 
-    print("Loading model...")
-    model = build_model(INPUT_SHAPE, len(CLASSES))
-    model.load_weights(MODEL_PATH)
+    print(f"Smoothing: {SMOOTHING_WINDOW} frames ({SMOOTHING_WINDOW * STEP_SECONDS:.1f}s)")
+    print(f"Thresholds - Noise: {THRESHOLDS['noise'] * 100:.0f}%, Instruments: {THRESHOLDS['default'] * 100:.0f}%")
+    print(f"Hysteresis: +{HYSTERESIS_BONUS * 100:.0f}%\n")
 
-    print(f"Smoothing: {SMOOTHING_WINDOW} frames ({SMOOTHING_WINDOW*STEP_DURATION:.1f}s)")
-    print(f"Thresholds - Noise: {THRESHOLDS['noise']*100:.0f}%, Instruments: {THRESHOLDS['default']*100:.0f}%")
-    print(f"Hysteresis: +{HYSTERESIS_BONUS*100:.0f}%\n")
+    buffer = np.zeros(int(SR * WINDOW_SECONDS), dtype=np.float32)
+    history = deque(maxlen=SMOOTHING_WINDOW)
+    current_class = "noise"
 
     stream = sd.InputStream(
-        channels=1, samplerate=SR,
+        channels=1,
+        samplerate=SR,
+        blocksize=int(SR * STEP_SECONDS),
         callback=audio_callback,
-        blocksize=int(SR * STEP_DURATION)
     )
 
-    full_buffer = np.zeros(int(SR * WINDOW_DURATION))
-    prob_history = deque(maxlen=SMOOTHING_WINDOW)
-    current_displayed_class = "noise"
-
-    with stream:
-        print("Listening... (Ctrl+C to stop)\n")
-        try:
+    print("Listening... (Ctrl+C to stop)\n")
+    try:
+        with stream:
             while True:
                 chunk = audio_q.get().flatten()
-                full_buffer = np.roll(full_buffer, -len(chunk))
-                full_buffer[-len(chunk):] = chunk
+                buffer = np.roll(buffer, -len(chunk))
+                buffer[-len(chunk):] = chunk
 
-                feat_raw = extract_log_mel(full_buffer, sr=SR)
-                if feat_raw.shape[1] < INPUT_SHAPE[1]:
-                    feat_raw = np.pad(feat_raw, ((0, 0), (0, INPUT_SHAPE[1] - feat_raw.shape[1])))
-                elif feat_raw.shape[1] > INPUT_SHAPE[1]:
-                    feat_raw = feat_raw[:, :INPUT_SHAPE[1]]
-
-                X = normalize_features(feat_raw).reshape(1, INPUT_SHAPE[0], INPUT_SHAPE[1], 1)
-                pred_prob = model.predict(X, verbose=0)[0]
-                prob_history.append(pred_prob)
-
-                smoothed = np.mean(prob_history, axis=0)
-                adjusted = smoothed.copy()
-                adjusted[CLASSES.index(current_displayed_class)] += HYSTERESIS_BONUS
-
-                new_idx = np.argmax(adjusted)
-                new_class = CLASSES[new_idx]
-
-                if new_class != current_displayed_class:
-                    thresh = THRESHOLDS["noise"] if new_class == "noise" else THRESHOLDS["default"]
-                    if smoothed[new_idx] >= thresh:
-                        current_displayed_class = new_class
-
-                display_prediction(smoothed, current_displayed_class)
-
-        except KeyboardInterrupt:
-            print("\n\nStopped.")
+                probs = model.predict(prepare_input(buffer), verbose=0)[0]
+                history.append(probs)
+                smoothed = np.mean(history, axis=0)
+                current_class = choose_class(smoothed, current_class)
+                display_prediction(smoothed, current_class)
+    except KeyboardInterrupt:
+        print("\n\nStopped.")
 
 
 if __name__ == "__main__":

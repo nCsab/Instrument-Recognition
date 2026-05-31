@@ -3,10 +3,11 @@ dataset/
 hybrid_dataset/
 dataset_clean/
 dataset_mic/
+experiment_datasets/
+augmented_previews/
 augmented_samples/
 owndataset/
 processed_data/
-augmented_samples/
 
 # Audio and binary files
 *.wav
@@ -39,14 +40,16 @@ thesis/*.blg
 thesis/*.bbl
 thesis/*.run.xml
 thesis/missfont.log
+thesis/*.fdb_latexmk
+thesis/*.fls
+thesis/*.lot
 
 # VS Code workspace settings
 .vscode/
 *.code-workspace
 
 # Trained model files
-models/*.keras
-models/*.h5
+models/
 
 # Local verification scripts
 scripts/verify_leakage.py

@@ -1,4 +1,6 @@
 import os
+import json
+from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models, callbacks
@@ -16,11 +18,14 @@ tf.random.set_seed(42)
 drive.mount('/content/drive')
 
 PROJECT_ROOT = '/content/drive/MyDrive/Instrument_Recognition'
-DATASET_TYPE = 'mic'  # Lehetőségek: 'clean', 'augmented', 'mic'
+DATASET_TYPE = 'exp_clean'  # Pl.: 'exp_clean', 'exp_augmented', 'exp_naive_deployment', 'exp_final'
 FEATURE_TYPE = 'log_mel'  # Lehetőségek: 'log_mel', 'stft', 'mfcc'
+EVALUATION_SPLIT = 'val'  # Modellválasztáshoz: 'val'. Csak a végső győztesnél: 'test'.
+TRAIN_MODEL = True  # False esetén a CHECKPOINT_TO_EVALUATE modellt tölti be újratanítás nélkül.
+CHECKPOINT_TO_EVALUATE = None  # Pl.: 'exp_final_log_mel_2dcnn_val_20260527_203032_best_model.keras'
 
-DATA_PATH = os.path.join(PROJECT_ROOT, f'processed_data_{DATASET_TYPE}')
-MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, f'models_{DATASET_TYPE}')
+DATA_PATH = os.path.join(PROJECT_ROOT, 'processed_data', DATASET_TYPE)
+MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, 'models', DATASET_TYPE)
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 
@@ -118,97 +123,174 @@ def load_subset(subset, feature_type):
     return X, y
 
 
-def plot_results(y_test, y_pred, history, feature_type, save_path):
-    report_dict = classification_report(y_test, y_pred, target_names=CLASSES, output_dict=True)
-    cm = confusion_matrix(y_test, y_pred)
+def plot_results(y_true, y_pred, history, feature_type, eval_split, save_path, artifact_prefix):
+    report_dict = classification_report(y_true, y_pred, target_names=CLASSES, output_dict=True)
+    cm = confusion_matrix(y_true, y_pred)
 
     # Confusion Matrix
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=CLASSES, yticklabels=CLASSES)
-    plt.title(f'Confusion Matrix - {feature_type}')
+    plt.title(f'Confusion Matrix - {feature_type} ({eval_split})')
     plt.ylabel('Actual'); plt.xlabel('Predicted')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_path, f'best_{feature_type}_2dcnn_confusion_matrix.png'), dpi=300)
+    plt.savefig(os.path.join(save_path, f'{artifact_prefix}_confusion_matrix.png'), dpi=300)
     plt.show(); plt.close()
 
     # F1 Scores
     f1_scores = [report_dict[cls]['f1-score'] for cls in CLASSES]
     plt.figure(figsize=(10, 6))
     sns.barplot(x=CLASSES, y=f1_scores, hue=CLASSES, palette='viridis', legend=False)
-    plt.title(f'F1-Scores - {feature_type}')
+    plt.title(f'F1-Scores - {feature_type} ({eval_split})')
     plt.ylabel('F1-Score'); plt.ylim(0, 1.1)
     for i, v in enumerate(f1_scores):
         plt.text(i, v + 0.02, f"{v:.2f}", ha='center')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_path, f'best_{feature_type}_2dcnn_f1_scores.png'), dpi=300)
+    plt.savefig(os.path.join(save_path, f'{artifact_prefix}_f1_scores.png'), dpi=300)
     plt.show(); plt.close()
 
-    # Accuracy & Loss
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'], label='Train')
-    plt.plot(history.history['val_accuracy'], label='Validation')
-    plt.title(f'Accuracy - {feature_type}'); plt.xlabel('Epochs'); plt.ylabel('Accuracy'); plt.legend()
+    if history is not None:
+        # Accuracy & Loss
+        plt.figure(figsize=(12, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(history.history['accuracy'], label='Train')
+        plt.plot(history.history['val_accuracy'], label='Validation')
+        plt.title(f'Accuracy - {feature_type}'); plt.xlabel('Epochs'); plt.ylabel('Accuracy'); plt.legend()
 
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'], label='Train')
-    plt.plot(history.history['val_loss'], label='Validation')
-    plt.title(f'Loss - {feature_type}'); plt.xlabel('Epochs'); plt.ylabel('Loss'); plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(history.history['loss'], label='Train')
+        plt.plot(history.history['val_loss'], label='Validation')
+        plt.title(f'Loss - {feature_type}'); plt.xlabel('Epochs'); plt.ylabel('Loss'); plt.legend()
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_path, f'best_{feature_type}_2dcnn_acc_loss.png'), dpi=300)
-    plt.show(); plt.close()
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_path, f'{artifact_prefix}_acc_loss.png'), dpi=300)
+        plt.show(); plt.close()
 
     return report_dict
 
 
+def save_evaluation_report(y_true, y_pred, report_text, report_dict, eval_split, save_path, artifact_prefix, checkpoint_path):
+    cm = confusion_matrix(y_true, y_pred)
+    cm_path = os.path.join(save_path, f'{artifact_prefix}_confusion_matrix.csv')
+    txt_path = os.path.join(save_path, f'{artifact_prefix}_classification_report.txt')
+    json_path = os.path.join(save_path, f'{artifact_prefix}_classification_report.json')
+
+    np.savetxt(cm_path, cm, fmt='%d', delimiter=',')
+
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        f.write(f"Dataset: {DATASET_TYPE}\n")
+        f.write(f"Feature: {FEATURE_TYPE}\n")
+        f.write(f"Evaluation split: {eval_split}\n")
+        f.write("Model: 2dcnn\n")
+        f.write(f"Checkpoint: {checkpoint_path}\n")
+        f.write(f"Generated at: {datetime.now().isoformat(timespec='seconds')}\n\n")
+        f.write(report_text)
+        f.write(f"\nAccuracy: {report_dict['accuracy']*100:.1f}%\n")
+        f.write(f"Macro F1: {report_dict['macro avg']['f1-score']*100:.1f}%\n")
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            "dataset": DATASET_TYPE,
+            "feature": FEATURE_TYPE,
+            "evaluation_split": eval_split,
+            "model": "2dcnn",
+            "checkpoint": checkpoint_path,
+            "generated_at": datetime.now().isoformat(timespec='seconds'),
+            "classification_report": report_dict,
+            "confusion_matrix": cm.tolist()
+        }, f, indent=2)
+
+    print(f"Saved report: {txt_path}")
+    print(f"Saved report data: {json_path}")
+    print(f"Saved confusion matrix CSV: {cm_path}")
+
+
+def resolve_checkpoint_path(checkpoint_name):
+    if not checkpoint_name:
+        return None
+    return checkpoint_name if os.path.isabs(checkpoint_name) else os.path.join(MODEL_SAVE_PATH, checkpoint_name)
+
+
+def load_saved_model(checkpoint_path):
+    return tf.keras.models.load_model(
+        checkpoint_path,
+        custom_objects={'SpecAugment': SpecAugment},
+        compile=False
+    )
+
+
 # --- Main ---
 def main():
+    if EVALUATION_SPLIT not in ['val', 'test']:
+        raise ValueError("EVALUATION_SPLIT must be 'val' or 'test'")
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    artifact_prefix = f'{DATASET_TYPE}_{FEATURE_TYPE}_2dcnn_{EVALUATION_SPLIT}_{run_id}'
+    checkpoint_path = resolve_checkpoint_path(CHECKPOINT_TO_EVALUATE)
+
     print(f"Loading data ({FEATURE_TYPE})...")
-    X_train, y_train = load_subset('train', FEATURE_TYPE)
+    if TRAIN_MODEL:
+        X_train, y_train = load_subset('train', FEATURE_TYPE)
     X_val, y_val = load_subset('val', FEATURE_TYPE)
-    X_test, y_test = load_subset('test', FEATURE_TYPE)
+    if EVALUATION_SPLIT == 'test':
+        X_eval, y_eval = load_subset('test', FEATURE_TYPE)
+    else:
+        X_eval, y_eval = X_val, y_val
 
     num_classes = len(CLASSES)
     
     # Szigorú Label Stratégia: One-Hot kódolás + Smoothing a tréningre
     LABEL_SMOOTHING = 0.1
-    y_train_encoded = tf.one_hot(y_train, num_classes) * (1.0 - LABEL_SMOOTHING) + (LABEL_SMOOTHING / num_classes)
     y_val_encoded = tf.one_hot(y_val, num_classes)
 
     print("Data shapes:")
-    print(f"  train: {X_train.shape}")
+    print(f"  train: {X_train.shape if TRAIN_MODEL else 'not loaded in evaluate-only mode'}")
     print(f"  val  : {X_val.shape}")
-    print(f"  test : {X_test.shape}\n")
-
-    model = build_model((X_train.shape[1], X_train.shape[2], X_train.shape[3]), num_classes, FEATURE_TYPE)
-    model.summary()
+    if EVALUATION_SPLIT == 'test':
+        print(f"  test : {X_eval.shape}\n")
+    else:
+        print("  test : not loaded during model selection\n")
 
     os.makedirs(MODEL_SAVE_PATH, exist_ok=True)
 
-    callbacks_list = [
-        callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-        callbacks.ModelCheckpoint(
-            os.path.join(MODEL_SAVE_PATH, f'best_{FEATURE_TYPE}_2dcnn_model.keras'),
-            monitor='val_accuracy', save_best_only=True
-        ),
-        callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
-    ]
+    if TRAIN_MODEL:
+        checkpoint_path = os.path.join(MODEL_SAVE_PATH, f'{artifact_prefix}_best_model.keras')
+        y_train_encoded = tf.one_hot(y_train, num_classes) * (1.0 - LABEL_SMOOTHING) + (LABEL_SMOOTHING / num_classes)
+        model = build_model((X_train.shape[1], X_train.shape[2], X_train.shape[3]), num_classes, FEATURE_TYPE)
+        model.summary()
 
-    print("\nTraining...")
-    history = model.fit(
-        X_train, y_train_encoded,
-        validation_data=(X_val, y_val_encoded),
-        epochs=150, batch_size=32,
-        callbacks=callbacks_list
-    )
+        callbacks_list = [
+            callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+            callbacks.ModelCheckpoint(
+                checkpoint_path,
+                monitor='val_loss', mode='min', save_best_only=True
+            ),
+            callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
+        ]
 
-    y_pred = np.argmax(model.predict(X_test), axis=1)
+        print(f"\nTraining... checkpoint: {checkpoint_path}")
+        history = model.fit(
+            X_train, y_train_encoded,
+            validation_data=(X_val, y_val_encoded),
+            epochs=150, batch_size=32,
+            callbacks=callbacks_list
+        )
+        model = load_saved_model(checkpoint_path)
+    else:
+        if checkpoint_path is None:
+            raise ValueError("Set CHECKPOINT_TO_EVALUATE when TRAIN_MODEL is False.")
+        print(f"\nLoading checkpoint without training: {checkpoint_path}")
+        model = load_saved_model(checkpoint_path)
+        history = None
 
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred, target_names=CLASSES))
+    y_pred = np.argmax(model.predict(X_eval), axis=1)
 
-    report_dict = plot_results(y_test, y_pred, history, FEATURE_TYPE, MODEL_SAVE_PATH)
+    report_text = classification_report(y_eval, y_pred, target_names=CLASSES)
+
+    print(f"\nClassification Report ({EVALUATION_SPLIT}):")
+    print(report_text)
+
+    report_dict = plot_results(y_eval, y_pred, history, FEATURE_TYPE, EVALUATION_SPLIT, MODEL_SAVE_PATH, artifact_prefix)
+    save_evaluation_report(y_eval, y_pred, report_text, report_dict, EVALUATION_SPLIT, MODEL_SAVE_PATH, artifact_prefix, checkpoint_path)
 
     print(f"Accuracy: {report_dict['accuracy']*100:.1f}%")
     print(f"Macro F1: {report_dict['macro avg']['f1-score']*100:.1f}%")

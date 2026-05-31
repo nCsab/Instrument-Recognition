@@ -1,77 +1,160 @@
 \chapter{A rendszer specifikációi és architektúrája}
 \label{chap:specifikacio}
 
-A szakdolgozat előző fejezetében bemutatott akusztikai és mélytanulási elméleti alapokra építkezve jelen fejezet a megvalósított hangszerfelismerő rendszer mérnöki és szoftverfejlesztési tervezését ismerteti. Egy gépi tanulási alapú valós idejű hangfelismerő rendszer fejlesztése során nem csupán a neurális hálózat architektúrájára kell fókuszálni, hanem egy olyan robusztus csővezeték (pipeline) kialakítására is, amely képes a nyers adatok betöltésétől kezdve az adatok transzformációján át egészen a végfelhasználói valós idejű interakcióig minden lépést zökkenőmentesen kiszolgálni.
+Az előző fejezetben bemutatott akusztikai és gépi tanulási alapok után ebben a fejezetben pontosítom, hogy milyen rendszert kellett megterveznem. Itt még nem a konkrét rétegek, hiperparaméterek vagy mérési eredmények a fontosak, hanem az, hogy a projekt milyen feladatot old meg, milyen határok között értelmezhető, és milyen fő komponensekből áll.
 
-Ez a fejezet definiálja a rendszerrel szemben támasztott funkcionális és nem funkcionális követelményeket, bemutatja a felhasználói eseteket (Use Case), valamint részletezi az alkalmazás belső szoftverarchitektúráját és a technológiai választások hátterét.
+A célom egy olyan hangszerfelismerő rendszer készítése volt, amely előkészített hangmintákon tanítható, több kísérleti adathalmaz-változaton ellenőrizhető, majd a kiválasztott saját modell valós időben, mikrofonról is futtatható. A rendszer központi megoldása a saját Log-Mel spektrogramra épülő 2D CNN pipeline; a YAMNet transfer learning modell összehasonlító referencia, nem pedig a valós idejű alkalmazás fő útvonala.
 
-\section{Célkitűzések és követelményelemzés}
+\section{Feladatpontosítás és rendszerhatárok}
 
-A fejlesztés fő célkitűzése egy olyan keretrendszer létrehozása volt, amely képes előre felvett zenei adathalmazokon különböző jellemzőkinyerési módszereket alkalmazni, azokkal modern konvolúciós neurális hálózatokat tanítani, majd a legpontosabb modellt egy valós idejű (mikrofonos) környezetben is megbízhatóan futtatni.
+A dolgozat feladata hét hangosztály felismerése rövid, 1 másodperces hangminták alapján. A hat hangszeres kategória a gitár, zongora, vokál, vonós, nádfúvós és rézfúvós, ezeket egészíti ki a zaj/csend kategória. A választott felbontás szándékosan hangszercsalád-szintű: nem az a cél, hogy például a trombitát és a harsonát minden esetben különválasszam, hanem hogy a rendszer egy valós időben is kezelhető, robusztusabb kategóriarendszeren működjön.
 
-\subsection{Funkcionális követelmények}
-A funkcionális követelmények azokat a konkrét folyamatokat és szolgáltatásokat írják le, amelyeket a rendszernek feltétlenül nyújtania kell a sikeres működés érdekében:
+A rendszer határait a következőképpen határoztam meg:
 \begin{itemize}
-    \item \textbf{Adathalmazok fúziója és tisztítása:} A szoftvernek képesnek kell lennie nyílt forrású (pl. NSynth, Good-sounds) és saját gyűjtésű adathalmazok egyesítésére, a hibás vagy csendes minták algoritmikus szűrésére.
-    \item \textbf{Jellemzőkinyerés (Feature Extraction):} A nyers \texttt{.wav} fájlokból automatikusan generálni kell a spektrogramokat (STFT és Mel-spektrogram) a megadott ablakozási paraméterekkel, és azokat hatékony Numpy mátrix formátumban menteni.
-    \item \textbf{Modell tanítása (Training Pipeline):} Egy konfigurálható csővezeték megléte, amely betölti az előkészített adatokat, definiálja a 2D CNN architektúrát, majd korai leállás (early stopping) használatával optimalizálja a modellt, és kimenti a legjobb súlyokat.
-    \item \textbf{Valós idejű predikció:} Egy önálló futtatható modul, amely másodpercenként rögzíti a számítógép mikrofonjának jelét, valós időben jellemzőt von ki, és a betanított Keras modellen lefuttatva terminálos felületen jelzi a felismert hangszercsaládot.
+  \item \textbf{Bemenet:} 16 kHz-re egységesített, mono hanganyag, offline tanításhoz fájlokból, valós idejű használathoz mikrofonból.
+  \item \textbf{Kimenet:} egy hét elemű valószínűségi vektor, illetve a legvalószínűbb hangosztály megjelenítése.
+  \item \textbf{Fő felhasználás:} kutatási és demonstrációs célú hangszerfelismerés, külön hangsúlyt adva a mikrofonos célkörnyezet hatásának.
+  \item \textbf{Nem cél:} polifón hangszer-szétválasztás, pontos hangszerazonosítás egy családon belül, mobilalkalmazás vagy ipari minőségű zenei elemző rendszer készítése.
 \end{itemize}
 
-\subsection{Nem funkcionális követelmények}
-A nem funkcionális követelmények a rendszer működésének minőségi mutatóira fókuszálnak:
-\begin{itemize}
-    \item \textbf{Alacsony késleltetés (Low Latency):} A valós idejű működés kritikus feltétele, hogy az 1 másodperces audio ablak rögzítése és a predikció megjelenítése között eltelt idő ne haladja meg a 200--300 milliszekundumot, ezáltal a felhasználó azonnali visszajelzést kapjon.
-    \item \textbf{Erőforrás-hatékonyság:} A jellemzőkinyerésnek és a predikciónak CPU-n is zökkenőmentesen kell futnia, elkerülve a memóriaszivárgást egy végtelenített valós idejű futás (pl. folyamatos élő koncert figyelése) során.
-    \item \textbf{Modularitás:} A kódnak lazán csatolt (loosely coupled) szkriptekből kell állnia, hogy a jellemzőkinyerési algoritmus, a neurális háló architektúrája vagy a mikrofonos rögzítési logika egymástól függetlenül módosítható vagy cserélhető legyen.
-\end{itemize}
+Ez a lehatárolás azért fontos, mert a rendszer minőségét nem egy általános zenei AI-platform mércéjével kell értelmezni. A dolgozat fő értéke a teljes adatfolyam megtervezése: saját adathalmaz, augmentáció, mikrofonos domain shift, modellválasztás, validáció, végső teszt és valós idejű működés.
 
-\section{Használati esetek (Use Case modell)}
+\section{Funkcionális követelmények}
 
-A rendszer interakciós felületeit és főbb felhasználási forgatókönyveit egy UML Use Case diagram (\ref{fig:usecase}.~ábra) segítségével modelleztük. Két fő aktort azonosíthatunk:
+A funkcionális követelmények azt írják le, hogy a rendszernek milyen műveleteket kell ténylegesen elvégeznie. Ezeket a követelményeket úgy határoztam meg, hogy lefedjék a teljes kutatási és alkalmazási folyamatot az adatgyűjtéstől az élő predikcióig.
+
 \begin{enumerate}
-    \item \textbf{Felhasználó / Kutató:} Az a mérnök vagy adattudós, aki a modell betanításáért és teszteléséért felelős.
-    \item \textbf{Mikrofon / Bemenet (Rendszer-aktor):} A valós idejű adatáramlást biztosító hardveres periféria, amely automatikusan triggeli a rendszer predikciós eseményeit.
+  \item \textbf{Tiszta adathalmaz előállítása:} a rendszer képes legyen az internetes forrásokból válogatott hangszeres mintákat és az ESC-50-ből származó zajmintákat egységes szerkezetbe rendezni.
+  \item \textbf{Train/validation/test szeparáció:} a felosztás még a rövid, 1 másodperces szeletek létrehozása előtt történjen, hogy az egymáshoz közeli szeletek ne kerüljenek külön halmazokba.
+  \item \textbf{Mikrofonos újrafelvétel kezelése:} a tiszta mintákból split szerint rendezett, visszajátszott és újrarögzített mikrofonos változatok készülhessenek.
+  \item \textbf{Kísérleti adathalmazok összeállítása:} a rendszer külön kezelje a clean, augmented, naive deployment és final kísérleti adathalmazokat.
+  \item \textbf{Jellemzőkinyerés:} a rendszer állítson elő Log-Mel, STFT és MFCC reprezentációkat, valamint a YAMNethez szükséges nyers hanghullámot ott, ahol ez indokolt.
+  \item \textbf{Modelltanítás és riportolás:} a tanítás mentse a legjobb checkpointot, a classification reportot, a konfúziós mátrixot és a fontosabb diagramokat úgy, hogy az ismételt futások ne írják felül egymást.
+  \item \textbf{Valós idejű felismerés:} a kiválasztott saját Log-Mel CNN modell legyen betölthető mikrofonos predikcióhoz, simítással és küszöböléssel stabilizált terminálos visszajelzéssel.
 \end{enumerate}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth,height=0.5\textheight,keepaspectratio]{fig_usecase.png}
-    \caption{A hangszerfelismerő rendszer főbb használati esetei (UML Use Case diagram)}
-    \label{fig:usecase}
+\section{Nem funkcionális követelmények}
+
+A nem funkcionális követelmények a rendszer minőségi tulajdonságait határozzák meg. Ezek a dolgozat szempontjából legalább olyan fontosak, mint maga a predikciós pontosság, mert egy gépi tanulási rendszer könnyen adhat látványos, de módszertanilag gyenge eredményeket.
+
+\begin{itemize}
+  \item \textbf{Reprodukálhatóság:} a szkriptekben a véletlen műveletekhez rögzített seedet használok, és az eredményfájlok időbélyeges névvel készülnek.
+  \item \textbf{Adatszivárgás csökkentése:} a felosztás blokkszinten történik, az augmentáció csak a tanítóhalmazon jelenik meg, és a végső tesztet csak a kiválasztott modellek ellenőrzésére használom.
+  \item \textbf{Domain shift mérhetősége:} külön validációs és tesztelési helyzetben szerepel a mikrofonos domain, hogy látható legyen a tiszta és a célkörnyezeti adat közötti különbség.
+  \item \textbf{Erőforrás-hatékonyság:} a saját modell mérete maradjon kezelhető, hogy a betanított hálózat egy átlagos laptopon is használható legyen valós időben.
+  \item \textbf{Modularitás:} az adatelőkészítés, jellemzőkinyerés, tanítás és valós idejű felismerés külön futtatható egységekre legyen bontva.
+  \item \textbf{Átlátható kiértékelés:} az eredmények ne csak egyetlen accuracy értékként jelenjenek meg, hanem osztályonkénti precision, recall, F1-score és konfúziós mátrix formájában is.
+\end{itemize}
+
+\section{Használati esetek}
+
+A rendszer két fő használati mód köré szerveződik. Az első a fejlesztői/kutatási folyamat, ahol az adathalmazok előkészítése, a jellemzőkinyerés és a modellek tanítása történik. A második a végfelhasználói jellegű valós idejű használat, ahol a korábban kiválasztott modell mikrofonból érkező hangra ad visszajelzést.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  actor/.style={font=\small, align=center},
+  usecase/.style={draw, rounded corners=18pt, minimum width=4.2cm, minimum height=0.9cm, align=center, font=\footnotesize, fill=blue!5},
+  boundary/.style={draw, rounded corners, inner sep=0.35cm},
+  line/.style={thick}
+]
+  \node[actor] (devlabel) at (-5.5, 1.8) {Fejlesztő /\\ kutató};
+  \draw[line] (-5.5,1.45) circle (0.18);
+  \draw[line] (-5.5,1.27) -- (-5.5,0.55);
+  \draw[line] (-5.9,1.02) -- (-5.1,1.02);
+  \draw[line] (-5.5,0.55) -- (-5.9,0.05);
+  \draw[line] (-5.5,0.55) -- (-5.1,0.05);
+
+  \node[actor] (userlabel) at (-5.5, -3.2) {Végfelhasználó};
+  \draw[line] (-5.5,-3.55) circle (0.18);
+  \draw[line] (-5.5,-3.73) -- (-5.5,-4.45);
+  \draw[line] (-5.9,-3.98) -- (-5.1,-3.98);
+  \draw[line] (-5.5,-4.45) -- (-5.9,-4.95);
+  \draw[line] (-5.5,-4.45) -- (-5.1,-4.95);
+
+  \node[boundary, minimum width=10cm, minimum height=7.0cm, label={[font=\bfseries]above:Hangszerfelismerő rendszer}] (system) at (0,-1.2) {};
+
+  \node[usecase] (dataset) at (-1.5,1.2) {Adathalmaz\\előállítása};
+  \node[usecase] (features) at (2.6,1.2) {Jellemzők\\kinyerése};
+  \node[usecase] (train) at (-1.5,-0.4) {Modell tanítása\\és validálása};
+  \node[usecase] (reports) at (2.6,-0.4) {Riportok és\\diagramok mentése};
+  \node[usecase] (checkpoint) at (0.6,-2.0) {Checkpoint\\kiválasztása};
+  \node[usecase] (realtime) at (-1.5,-3.6) {Valós idejű\\felismerés indítása};
+  \node[usecase] (display) at (2.6,-3.6) {Predikció\\megjelenítése};
+
+  \draw[line] (-5.1,1.0) -- (dataset);
+  \draw[line] (-5.1,0.8) -- (features);
+  \draw[line] (-5.1,0.6) -- (train);
+  \draw[line] (-5.1,0.4) -- (reports);
+  \draw[line] (-5.1,-3.9) -- (realtime);
+  \draw[line] (-5.1,-4.1) -- (display);
+
+  \draw[->, thick] (dataset) -- (features);
+  \draw[->, thick] (features) -- (train);
+  \draw[->, thick] (train) -- (reports);
+  \draw[->, thick] (train) -- (checkpoint);
+  \draw[->, thick] (checkpoint) -- (realtime);
+  \draw[->, thick] (realtime) -- (display);
+\end{tikzpicture}
+\caption{A rendszer fő használati esetei UML jellegű use case ábrán}
+\label{fig:usecase}
 \end{figure}
 
-A használati esetek világosan elkülönítik a "laboratóriumi" vagy kutatási fázist (adatelőkészítés és tanítás) a "produkciós" fázistól (élő predikció). Fontos tervezési szempont volt, hogy a valós idejű hangfelvétel folyamata szorosan inkluzív (\textit{<<include>>}) kapcsolatban álljon a hangszer predikciójával, hiszen a mikrofon bufferének megtelése azonnal és megszakítás nélkül aktiválja az osztályozó modult.
+Az ábra szándékosan nem különíti el minden szkript apró részfeladatát. A specifikáció szintjén az a lényeges, hogy a rendszernek legyen egy kutatási ága, amelyből hitelesen kiválasztható egy modell, és legyen egy alkalmazási ága, amely ezt a modellt élő hangon használja.
 
 \section{Rendszerarchitektúra és adatfolyam}
 
-Egy robusztus gépi tanulási rendszer architektúrája túlmutat magán a neurális hálózaton; magában foglalja az adatbeviteli (ingestion), az adatfeldolgozási (preprocessing) és az eredmény-megjelenítési (serving) rétegeket is. A megvalósított rendszer szoftverarchitektúráját és az adatok útját a \ref{fig:architecture}.~ábra UML komponensdiagramja vizualizálja.
+A rendszer architektúráját adatfolyamként érdemes értelmezni. A nyers hangfájlokból először kísérleti adathalmazok készülnek, ezekből jellemzőmátrixok, majd ezekre épülnek a tanított modellek. A valós idejű felismerés ugyanazt a Log-Mel reprezentációt használja, mint a tanítás, így a tanító és az alkalmazási útvonal között nincs módszertani törés.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig_architecture.png}
-    \caption{A rendszerarchitektúra és a folyamatos adatfolyam (UML Komponensdiagram)}
-    \label{fig:architecture}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.75cm and 0.9cm,
+  comp/.style={draw, rounded corners, minimum width=3.1cm, minimum height=1.0cm, align=center, font=\footnotesize, fill=blue!5},
+  store/.style={draw, rounded corners, minimum width=3.1cm, minimum height=1.0cm, align=center, font=\footnotesize, fill=green!6},
+  model/.style={draw, rounded corners, minimum width=3.1cm, minimum height=1.0cm, align=center, font=\footnotesize, fill=orange!8},
+  outputnode/.style={draw, rounded corners, minimum width=3.1cm, minimum height=1.0cm, align=center, font=\footnotesize, fill=red!6},
+  arrow/.style={thick,->,>=stealth}
+]
+  \node[store] (raw) {Forrás hangok\\clean, noise, mic};
+  \node[comp, right=of raw] (datasets) {Adathalmaz-\\összeállítás};
+  \node[store, right=of datasets] (exp) {\texttt{experiment\_datasets/}\\négy kísérlet};
+
+  \node[comp, below=of datasets] (features) {Jellemzőkinyerés\\Log-Mel, STFT, MFCC};
+  \node[store, right=of features] (processed) {\texttt{processed\_data/}\\NumPy tömbök};
+  \node[model, below=of processed] (train) {Tanítás\\2D CNN / YAMNet};
+
+  \node[store, left=of train] (models) {\texttt{models/}\\checkpointok, riportok};
+  \node[comp, below=of models] (realtime) {Valós idejű\\Log-Mel pipeline};
+  \node[outputnode, right=of realtime] (ui) {Terminálos\\predikció};
+
+  \draw[arrow] (raw) -- (datasets);
+  \draw[arrow] (datasets) -- (exp);
+  \draw[arrow] (exp) -- (features);
+  \draw[arrow] (features) -- (processed);
+  \draw[arrow] (processed) -- (train);
+  \draw[arrow] (train) -- (models);
+  \draw[arrow] (models) -- (realtime);
+  \draw[arrow] (realtime) -- (ui);
+  \draw[arrow] (processed) |- (realtime);
+\end{tikzpicture}
+\caption{A rendszer magas szintű architektúrája és adatfolyama}
+\label{fig:architecture}
 \end{figure}
 
-Az architektúra négy logikailag szeparált csomópontra (csomagra) bontható:
-\begin{enumerate}
-    \item \textbf{Környezet és Bemenet:} Felelős az adatok biztosításáért. Offline fázisban a \texttt{.wav} és \texttt{.mp3} fájlokból álló hatalmas adathalmazokat biztosítja lemezről, míg online fázisban a rendszer közvetlen I/O kapcsolatot tart a számítógép hangkártyájával.
-    \item \textbf{Adatelőkészítés (Jellemzőkinyerés):} Ez a modul a rendszer "szíve" az akusztikai feldolgozás szempontjából. A beérkező folytonos hanghullámokat átfedő keretekre (framing) és ablakokra vágja, majd elvégzi a Fourier-transzformációt (STFT) és a Mel-szűrőbankos konverziót. Kimenete mindig egy fix dimenziójú 2D mátrix, amely már skálázva, normalizálva áll készen a modell számára.
-    \item \textbf{Mélytanulási Modell (Keras):} A 2D konvolúciós rétegekből felépülő jellemzőkinyerő, majd az azt követő Sűrű (Dense) osztályozó hálózat. Bemenete a képszerű spektrogram, kimenete pedig egy valószínűségi vektor, amely a hangszer-osztályok eloszlását mutatja.
-    \item \textbf{Kimenet:} A fejlesztői terminálon (CLI) megvalósított frissülő felület, amely élőben listázza a predikciós százalékokat, valamint az offline validációs fázisban itt generálódnak a konfúziós mátrixok és a tanulási görbék.
-\end{enumerate}
+A \ref{fig:architecture}.~ábra alapján a rendszer három nagy részre bontható. Az első az adatelőkészítő rész, amely a nyers hangokból kontrollált kísérleti adathalmazokat állít elő. A második a tanítási és kiértékelési rész, ahol a modellek és riportok keletkeznek. A harmadik az alkalmazási rész, amely a kiválasztott checkpointot betölti, és mikrofonból érkező hangon futtatja a predikciót.
 
-\section{Alkalmazott technológiák és fejlesztői környezet}
+\section{Validációs és kísérleti protokoll}
+\label{sec:adatszivargas_gyakorlat}
 
-A projekt megvalósítása során kiemelt szempont volt a nyílt forráskódú, ipari szabványnak számító eszközök használata, amelyek kiterjedt dokumentációval és tudományos elfogadottsággal rendelkeznek. A fejlesztés Mac OS és Windows operációs rendszereken egyaránt tesztelve lett, biztosítva a platformfüggetlenséget.
+A mérési protokollt úgy alakítottam ki, hogy a modellválasztás és a végső ellenőrzés elkülönüljön. A tanítás és a modellválasztás validációs halmazon történik; a test halmazt csak a kiválasztott végső modellek lezáró ellenőrzésére használom. Ez különösen fontos kis adathalmaznál, mert ha a test eredmény visszahatna a modellválasztásra, akkor a dolgozat túl optimista képet adna a generalizációról.
 
-\subsection{Programozási nyelv és alapkörnyezet}
-A rendszer gerincét a \textbf{Python} programozási nyelv adja. A Python választását annak egyedülálló adattudományi és gépi tanulási ökoszisztémája, valamint a gyors prototipizálást támogató absztrakciói indokolták. A numerikus számításokat, a mátrix-műveleteket és a spektrogramok memóriahatékony tárolását a \textbf{NumPy} könyvtár biztosítja, míg az adatok struktúrált elemzését és tisztítását a \textbf{Pandas} adatkeretek (DataFrames) végzik. A valós idejű, alacsony késleltetésű mikrofonos rögzítést a \textbf{sounddevice} C-alapú Python wrapper hívásai teszik lehetővé.
+A négy kísérleti adathalmaz szerepe a következő:
+\begin{itemize}
+  \item \textbf{\texttt{exp\_clean}:} tiszta train, tiszta validáció és tiszta test; ez az alap baseline.
+  \item \textbf{\texttt{exp\_augmented}:} tiszta és augmentált train, tiszta validáció és tiszta test; ez az augmentáció hatását méri.
+  \item \textbf{\texttt{exp\_naive\_deployment}:} tiszta és augmentált train, de mikrofonos validáció és test; ez mutatja a domain shiftet.
+  \item \textbf{\texttt{exp\_final}:} tiszta, augmentált és mikrofonos train, mikrofonos validáció és test; ez a végső célrendszer.
+\end{itemize}
 
-\subsection{Akusztikai jelfeldolgozás: Librosa}
-A hangjelek beolvasásához, csendek levágásához, és a komplex idő-frekvencia transzformációk (STFT, Mel-spektrogram, MFCC) elvégzéséhez a \textbf{Librosa} könyvtárt alkalmaztam. A Librosa a zenei és audio elemzés (MIR) legelismertebb Python eszköze, amely natívan támogatja a pszichoakusztikai skálákat (például a Mel-skálát), így drasztikusan lerövidíti az akusztikai algoritmusok implementációs idejét, garantálva a laboratóriumi pontosságot.
-
-\subsection{Mélytanulási keretrendszer: TensorFlow és Keras}
-A mesterséges neurális hálózat architektúrájának definícióját, a modell tanítását és a valós idejű predikciók inferenciáját a \textbf{TensorFlow} platformon futó \textbf{Keras} API végzi. 
-A Keras választása a rendkívül gyors fejlesztési ciklus, a kényelmes réteg-absztrakciók (Conv2D, MaxPooling, Dropout) és a könnyű menthetőség miatt történt. A modell betanítása és az adathalmaz validálása nagy kapacitású hardveres környezetben futott, de az inferencia (az élő felismerés) során az elkészült hálózat olyan mértékben optimalizált maradt, hogy egy átlagos számítógép processzorán (CPU) is akadás nélkül, töredékmásodperces válaszidővel képes működni.
+Ezzel a felépítéssel nem csak az látható, hogy egy modell tiszta adatokon hogyan teljesít, hanem az is, hogy mi történik, amikor a bemenet átkerül a célkörnyezetbe. A részletes adathalmaz-tervezést, feature-választást és modellarchitektúrát a következő fejezet tárgyalja.

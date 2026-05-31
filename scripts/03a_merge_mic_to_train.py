@@ -1,65 +1,146 @@
-import os, shutil, random, glob
-import numpy as np
+import glob
+import hashlib
+import os
+import shutil
 
-SOURCE_DIR = "/Users/csabanagy/Desktop/project/dataset_clean"
-OUTPUT_DIR = "/Users/csabanagy/Desktop/project/dataset_mic"
-MIC_DIR = "/Users/csabanagy/Desktop/project/owndataset/record"
-CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass"]
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-def merge_class(cls):
-    print(f"Merging: {cls}...")
-    train_dir = os.path.join(OUTPUT_DIR, cls, "train")
-    if not os.path.exists(train_dir): return
+CLEAN_DIR = os.path.join(PROJECT_ROOT, "dataset_clean")
+MIC_DIR = os.path.join(PROJECT_ROOT, "owndataset", "record")
+EXPERIMENTS_DIR = os.path.join(PROJECT_ROOT, "experiment_datasets")
 
-    group_nums = [0]
-    for f in glob.glob(os.path.join(train_dir, "*_group*")):
-        try:
-            group_nums.append(int(os.path.basename(f).split("_group")[1].split("_")[0]))
-        except (IndexError, ValueError):
-            pass
-    max_grp = max(group_nums)
-    
-    mic_clips = sorted(glob.glob(os.path.join(MIC_DIR, f"{cls}_mic_1sec", "*.wav")))
-    for i, clip in enumerate(mic_clips):
-        shutil.copy(clip, os.path.join(train_dir, f"{cls}_mic_group{max_grp + 1 + (i//5)}_clip{i%5:02d}.wav"))
-    print(f"  {len(mic_clips)} mic clips -> train")
+SPLITS = ["train", "val", "test"]
+INSTRUMENTS = ["guitar", "piano", "vocal", "string", "reed", "brass"]
+CLASSES = INSTRUMENTS + ["noise"]
 
-def balance_noise():
-    print("\nBalancing noise class\n")
-    
-    clean_train = os.path.join(SOURCE_DIR, "noise", "train")
-    backup_dir = os.path.join(SOURCE_DIR, "noise", "train_backup")
-    
-    # Create backup from clean_train if it doesn't exist yet
-    if not os.path.exists(backup_dir) and os.path.exists(clean_train):
-        shutil.copytree(clean_train, backup_dir)
-        
-    # Read the full pool of noise files from the backup directory
-    pool = sorted(glob.glob(os.path.join(backup_dir, "*.wav")))
-    
-    avg_clean = int(np.mean([len(glob.glob(os.path.join(SOURCE_DIR, c, "train", "*.wav"))) for c in CLASSES]))
-    avg_mic = int(np.mean([len(glob.glob(os.path.join(OUTPUT_DIR, c, "train", "*.wav"))) for c in CLASSES]))
-    
-    random.seed(42)
-    random.shuffle(pool)
-    
-    for dest, count, lbl in [(clean_train, avg_clean * 2, "clean"), (os.path.join(OUTPUT_DIR, "noise", "train"), min(len(pool), avg_mic * 2), "mic")]:
-        if os.path.exists(dest): shutil.rmtree(dest)
-        os.makedirs(dest)
-        for f in pool[:count]: shutil.copy2(f, os.path.join(dest, os.path.basename(f)))
-        print(f"  {lbl}: {min(len(pool), count)} noise files")
+EXPERIMENTS = {
+    "exp_clean": {
+        "train": ["clean_train"], "val": ["clean_val"], "test": ["clean_test"],
+    },
+    "exp_augmented": {
+        "train": ["clean_train"], "val": ["clean_val"], "test": ["clean_test"],
+    },
+    "exp_naive_deployment": {
+        "train": ["clean_train"], "val": ["mic_val"], "test": ["mic_test"],
+    },
+    "exp_final": {
+        "train": ["clean_train", "mic_train"], "val": ["mic_val"], "test": ["mic_test"],
+    },
+}
+
+
+def wavs(path):
+    return sorted(glob.glob(os.path.join(path, "*.wav")))
+
+
+def file_hash(path):
+    with open(path, "rb") as file:
+        return hashlib.md5(file.read()).hexdigest()
+
+
+def source_files(cls, source):
+    kind, split = source.split("_", 1)
+    if kind == "clean":
+        return wavs(os.path.join(CLEAN_DIR, cls, split))
+    if cls == "noise":
+        return []
+
+    new_path = os.path.join(MIC_DIR, split, "slices", f"{cls}_mic_1sec")
+    old_train_path = os.path.join(MIC_DIR, f"{cls}_mic_1sec")
+    if os.path.exists(new_path):
+        return wavs(new_path)
+    if split == "train" and os.path.exists(old_train_path):
+        return wavs(old_train_path)
+    return []
+
+
+def missing_mic_sources(config):
+    missing = []
+    for split in SPLITS:
+        for source in config[split]:
+            if not source.startswith("mic_"):
+                continue
+            classes = [cls for cls in INSTRUMENTS if not source_files(cls, source)]
+            if classes:
+                missing.append(f"{source}: {', '.join(classes)}")
+    return missing
+
+
+def reset_dir(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path, exist_ok=True)
+
+
+def copy_class_split(exp_dir, cls, split, sources):
+    dest = os.path.join(exp_dir, cls, split)
+    os.makedirs(dest, exist_ok=True)
+
+    copied = 0
+    for source in sources:
+        for index, file_path in enumerate(source_files(cls, source)):
+            prefix = "mic" if source.startswith("mic_") else "clean"
+            out_name = f"{cls}_{prefix}_{split}_{copied + index:04d}.wav"
+            shutil.copy2(file_path, os.path.join(dest, out_name))
+        copied = len(wavs(dest))
+    return copied
+
+
+def copy_balanced_noise(exp_dir, split, used_hashes):
+    dest = os.path.join(exp_dir, "noise", split)
+    os.makedirs(dest, exist_ok=True)
+
+    counts = [len(wavs(os.path.join(exp_dir, cls, split))) for cls in INSTRUMENTS]
+    target = int(sum(counts) / len(counts)) if counts else 0
+
+    copied = 0
+    current_hashes = set()
+    for file_path in source_files("noise", f"clean_{split}"):
+        hash_value = file_hash(file_path)
+        if hash_value in used_hashes:
+            continue
+        shutil.copy2(file_path, os.path.join(dest, f"noise_clean_{split}_{copied:04d}.wav"))
+        current_hashes.add(hash_value)
+        copied += 1
+        if copied == target:
+            break
+
+    used_hashes.update(current_hashes)
+    return len(wavs(dest))
+
+
+def build_experiment(name, config):
+    exp_dir = os.path.join(EXPERIMENTS_DIR, name)
+    missing = missing_mic_sources(config)
+
+    print(f"\nBuilding {name}")
+    if missing:
+        if os.path.exists(exp_dir):
+            shutil.rmtree(exp_dir)
+        print("  Skipped because required microphone data is missing:")
+        for item in missing:
+            print(f"    - {item}")
+        return
+
+    reset_dir(exp_dir)
+    for cls in INSTRUMENTS:
+        for split in SPLITS:
+            count = copy_class_split(exp_dir, cls, split, config[split])
+            print(f"  {cls:<8} {split:<5} {count:4d} files")
+
+    used_noise_hashes = set()
+    for split in SPLITS:
+        count = copy_balanced_noise(exp_dir, split, used_noise_hashes)
+        print(f"  {'noise':<8} {split:<5} {count:4d} files")
+
 
 def main():
-    if os.path.exists(OUTPUT_DIR): shutil.rmtree(OUTPUT_DIR)
-    shutil.copytree(SOURCE_DIR, OUTPUT_DIR)
-    
-    for cls in CLASSES: merge_class(cls)
-    balance_noise()
-    
-    # Clean up the backup directory in OUTPUT_DIR so it doesn't remain in dataset_mic
-    mic_backup = os.path.join(OUTPUT_DIR, "noise", "train_backup")
-    if os.path.exists(mic_backup):
-        shutil.rmtree(mic_backup)
+    if not os.path.exists(CLEAN_DIR):
+        raise FileNotFoundError(f"Missing clean dataset: {CLEAN_DIR}")
+    for name, config in EXPERIMENTS.items():
+        build_experiment(name, config)
+
 
 if __name__ == "__main__":
     main()

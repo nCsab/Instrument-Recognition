@@ -3,13 +3,20 @@
 \chapter{Függelékek}
 \label{chap:fuggelek}
 
-A függelék tartalmazza az „Automatikus hangszerfelismerés zenefelvételek alapján” című államvizsga-szakdolgozat teljes forráskódját, az adathalmaz-struktúrát és a betanított modellfájlokat tartalmazó digitális adathordozó könyvtárszerkezetének leírását, valamint a felhasznált szoftverfüggőségek összegzését.
+A függelék az „Automatikus hangszerfelismerés zenefelvételek alapján” című
+államvizsga-szakdolgozathoz tartozó digitális projektanyag szerkezetét foglalja
+össze. A cél nem a teljes forráskód bemásolása, hanem annak áttekinthető
+megmutatása, hogy a nyers hangminták, a kísérleti adathalmazok, a kinyert
+jellemzők, a betanított modellek és a futtató szkriptek hol találhatók.
 
 %% ═══════════════════════════════════════════════════════════════════════════
 \section{A projekt könyvtárszerkezete}
 \label{sec:konyvtarszerkezet}
 
-A benyújtott digitális függelék (amely a GitHubon elérhető nyilvános Git adattárban\footnote{\url{https://github.com/nCsab/Instrument-Recognition}} is megtalálható) az alábbi főbb könyvtárakat tartalmazza. A számozott szkriptek a feldolgozási csővezeték (pipeline) egymásra épülő lépéseit jelzik.
+A benyújtott digitális függelék (amely a GitHubon elérhető nyilvános Git
+adattárban\footnote{\url{https://github.com/nCsab/Instrument-Recognition}} is
+megtalálható) az alábbi főbb könyvtárakat tartalmazza. A számozott szkriptek a
+feldolgozási csővezeték egymásra épülő lépéseit jelzik.
 
 \begin{table}[ht!]
 \centering
@@ -20,14 +27,15 @@ A benyújtott digitális függelék (amely a GitHubon elérhető nyilvános Git 
 \toprule
 \textbf{Könyvtár / Fájl} & \textbf{Leírás} \\
 \midrule
-\texttt{thesis/} & A \LaTeX\ formátumú szakdolgozat forrásfájljai, stílusfájl (\texttt{sapientia-thesis.cls}), irodalomjegyzék (\texttt{references.bib}) és a generált \texttt{main.pdf}. \\
-\texttt{scripts/} & A hangszerfelismerő rendszer Python szkriptjei (részletezés alább). \\
-\texttt{owndataset/} & A manuálisan összeválogatott és kivágott internetes hangminták hangszerosztályonként külön almappákban, valamint az újrafelvételezett minták a \texttt{recorded\_from\_mic/} almappában. \\
-\texttt{hybrid\_dataset\_\allowbreak own\_final/} & A végleges, összeszerelt hibrid adathalmaz 7~osztálymappával (\texttt{guitar}, \texttt{piano}, \texttt{vocal}, \texttt{string}, \texttt{reed}, \texttt{brass}, \texttt{noise}), osztályonként 1500~db, 1~másodperces, 16\,kHz-es WAV minta. \\
-\texttt{processed\_data/} & Az előállított jellemzőmátrixok NumPy formátumban: \texttt{X\_stft\_full.npy}, \texttt{X\_log\_mel\_full.npy}, \texttt{X\_mfcc\_full.npy} és a közös címkefájl \texttt{y\_labels\_full.npy}. \\
-\texttt{models/} & A betanított Keras modellfájlok: \texttt{best\_stft\_2dcnn\_model.keras}, \texttt{best\_log\_mel\_2dcnn\_model.keras}, \texttt{best\_mfcc\_2dcnn\_model.keras}. \\
-\texttt{augmented\_samples/} & Az augmentációs lánc bemutató mintái: minden hangszerosztályból 3-3 eredeti--augmentált páros WAV fájl ellenőrzés céljából. \\
-\texttt{dataset/} & A letöltött nyilvános referencia-adathalmazok (IRMAS, NSynth, Medley-solos-DB, TinySOL, Good-sounds, ESC-50) az elemzéshez. \\
+\texttt{thesis/} & A \LaTeX\ formátumú szakdolgozat forrásfájljai, stílusfájl, irodalomjegyzék, ábrák és a generált \texttt{main.pdf}. \\
+\texttt{scripts/} & A teljes feldolgozási, jellemzőkinyerési, tanítási és valós idejű felismerési folyamat Python szkriptjei. \\
+\texttt{owndataset/} & A saját gyűjtésű forrásminták és a mikrofonos újrafelvételezéshez kapcsolódó segédanyagok. \\
+\texttt{dataset\_clean/} & A tisztított, 1~másodperces clean minták osztályonként rendezett könyvtára. \\
+\texttt{experiment\_\allowbreak datasets/} & A négy kísérleti adathalmaz WAV-alapú változata: \texttt{exp\_clean}, \texttt{exp\_augmented}, \texttt{exp\_naive\_deployment} és \texttt{exp\_final}. \\
+\texttt{processed\_data/} & A kinyert NumPy jellemzők és címkék kísérletenkénti almappákban. A clean kísérlet tartalmazza az MFCC, STFT és Log-Mel reprezentációkat, a további kísérletek főként Log-Mel bemenettel futnak; az \texttt{exp\_final} a YAMNethez szükséges nyers audio tömböket is tartalmazza. \\
+\texttt{models/} & Az időbélyeggel mentett checkpointok, classification reportok, konfúziós mátrixok és tanulási görbék kísérletenkénti almappákban. \\
+\texttt{augmented\_\allowbreak previews/} & Az augmentáció ellenőrzéséhez generált eredeti--augmentált mintapárok és spektrogramábrák. \\
+\texttt{asd/} & A 2.~fejezet akusztikai szemléltetéséhez használt kontrollált A4/A3 referenciahangok. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -36,7 +44,9 @@ A benyújtott digitális függelék (amely a GitHubon elérhető nyilvános Git 
 \section{A feldolgozási csővezeték szkriptjei}
 \label{sec:pipeline_scripts}
 
-A rendszer teljes feldolgozási lánca indexelt Python szkriptekből áll, amelyek a tervezés sorrendjében futtathatók. Az alábbi táblázat leírja minden szkript feladatát.
+A rendszer teljes feldolgozási lánca indexelt Python szkriptekből áll, amelyek
+a tervezés sorrendjében futtathatók. Az alábbi táblázat az aktuális, végleges
+pipeline főbb elemeit foglalja össze.
 
 \begin{table}[ht!]
 \centering
@@ -47,17 +57,17 @@ A rendszer teljes feldolgozási lánca indexelt Python szkriptekből áll, amely
 \toprule
 \textbf{Szkript} & \textbf{Feladat} \\
 \midrule
-\texttt{01\_analyze\_datasets.py} & A nyilvános referencia-adathalmazok (IRMAS, NSynth stb.) szerkezetének és statisztikáinak feltárása, összehasonlító elemzés készítése. \\
-\texttt{02\_mic\_prep\_\allowbreak concatenate.py} & Az újrafelvételezéshez szükséges hanganyag előkészítése: a kiválasztott minták összefűzése egyetlen hosszú WAV fájlba sípszó-szinkronizálással. \\
-\texttt{03\_mic\_record\_audio.py} & A laptop beépített mikrofonjával vagy mobiltelefon mikrofonjával történő visszajátszás és valós idejű rögzítés. \\
-\texttt{04\_mic\_slice\_audio.py} & A rögzített mikrofonos felvétel darabolása 1~másodperces szegmensekre a sípszó-szinkronizáció alapján. \\
-\texttt{05\_assemble\_dataset.py} & A végleges hibrid adathalmaz összeállítása: a tiszta minták, az újrafelvételek és az augmentált minták egyesítése és randomizált másolása a \texttt{hybrid\_dataset\_own\_final/} könyvtárba. \\
-\texttt{05a\_prepare\_hybrid\_\allowbreak generic.py} & Kiegészítő előkészítő szkript a hibrid adathalmaz generikus felépítéséhez. \\
-\texttt{06\_extract\_features.py} & A fő jellemzőkinyerő szkript, amely az összes hangmintából STFT, log-mel és MFCC spektrogramokat generál, és NumPy mátrixokba menti. \\
-\texttt{06\_extract\_features/} & Alkönyvtár a három jellemzőtípus önálló kinyerő szkriptjeivel: \texttt{06\_extract\_stft.py}, \texttt{06\_extract\_log\_mel.py}, \texttt{06\_extract\_mfcc.py}. \\
-\texttt{07\_realtime\_\allowbreak recognition.py} & A valós idejű hangszerfelismerő modul: mikrofon-bemenet, csúszóablak, előrejelzés és megjelenítés. \\
-\texttt{10\_train\_model\_colab/} & A Google Colab felhőkörnyezetben futtatott tanító szkriptek: \texttt{10\_train\_stft.py}, \texttt{10\_train\_log\_mel.py}, \texttt{10\_train\_mfcc.py}. \\
-\texttt{utils/} & Segédmodulok: \texttt{augmentation\_utils.py} (az augmentációs lánc függvényei) és \texttt{feature\_utils.py} (jellemzőkinyerési segédfüggvények). \\
+\texttt{01\_prepare\_\allowbreak clean\_\allowbreak dataset.py} & A saját clean adathalmaz elkészítése: forrásblokkok szeparált felosztása, 1~másodperces szeletelés és zaj/csend minták kezelése. \\
+\texttt{02\_acquire\_\allowbreak mic\_\allowbreak data.py} & A clean minták visszajátszásának, mikrofonos rögzítésének és split/osztály szerinti rendezésének támogatása. \\
+\texttt{03a\_merge\_\allowbreak mic\_\allowbreak to\_\allowbreak train.py} & A négy kísérleti adathalmaz összeállítása a clean, augmentált és mikrofonos mintákból. \\
+\texttt{03b\_check\_\allowbreak dataset\_\allowbreak counts.py} & A kísérleti adathalmazok osztályonkénti és split szerinti ellenőrzése. \\
+\texttt{04a\_extract\_\allowbreak features.py} & A jellemzők kinyerése és normalizálása. A clean baseline esetén MFCC, STFT és Log-Mel, a további kísérleteknél Log-Mel, az \texttt{exp\_final} esetén pedig YAMNethez nyers audio is készül. \\
+\texttt{04b\_check\_\allowbreak extracted\_\allowbreak counts.py} & A kinyert NumPy tömbök és címkék méretének ellenőrzése. \\
+\texttt{05a\_realtime\_\allowbreak recognition.py} & A végső valós idejű Log-Mel + 2D CNN felismerő alkalmazás. \\
+\texttt{06\_train\_\allowbreak model\_\allowbreak colab/06\_train\_\allowbreak custom\_\allowbreak cnn.py} & A saját 2D CNN modell Google Colab környezetben futtatott tanítása, checkpointolása és riportgenerálása. \\
+\texttt{06\_train\_\allowbreak model\_\allowbreak colab/06\_train\_\allowbreak yamnet.py} & A YAMNet embeddingekre épülő transfer learning referencia tanítása és kiértékelése. \\
+\texttt{scripts/archive/05b\_\allowbreak realtime\_\allowbreak yamnet.py} & Archivált YAMNet realtime kísérleti script; nem a dolgozat fő, valós idejű alkalmazása. \\
+\texttt{scripts/utils/} & Segédfüggvények az augmentációhoz és a jellemzőkinyeréshez. \\
 \bottomrule
 \end{tabular}
 \end{table}

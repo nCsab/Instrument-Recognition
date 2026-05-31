@@ -1,83 +1,46 @@
 import os
-import re
 import sys
+import glob
 import librosa
 import soundfile as sf
 
 SR = 16000
-OUTPUT_DIR_5S = "instruments/brass/brass_5sec"
-
-if not os.path.exists(OUTPUT_DIR_5S):
-    os.makedirs(OUTPUT_DIR_5S)
-
-
-def find_file_with_extensions(filename):
-    if not filename:
-        return None
-    if os.path.exists(filename):
-        return filename
-    
-    extensions = [".wav", ".mp3", ".m4a", ".flac", ".ogg"]
-    for ext in extensions:
-        if os.path.exists(filename + ext):
-            return filename + ext
-    return None
-
-
-def get_next_index(directory, prefix):
-    if not os.path.exists(directory):
-        return 1
-    files = os.listdir(directory)
-    indices = []
-    pattern = re.compile(rf"{prefix}_(\d+)\.wav")
-    for f in files:
-        match = pattern.match(f)
-        if match:
-            indices.append(int(match.group(1)))
-    return max(indices) + 1 if indices else 1
-
-
-def save_block(y, sr, start_s, length_s):
-    start = int(start_s * sr)
-    end = start + int(length_s * sr)
-    
-    if end > len(y):
-        print(f"Figyelem: A kért szakasz ({start_s}-{start_s+length_s}s) túlnyúlik a fájlon, kihagyás.")
-        return
-
-    block = y[start:end]
-    block_idx = get_next_index(OUTPUT_DIR_5S, "horn_block")
-    block_name = f"horn_block_{block_idx:03d}.wav"
-    block_path = os.path.join(OUTPUT_DIR_5S, block_name)
-    sf.write(block_path, block, sr)
-    print(f"Mentett 5s blokk: {block_path}")
-
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "instruments", "guitar")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def main():
-    if len(sys.argv) < 3:
-        print("\nHasználat: python3 dataset.py \"fájlnév\" kezdőmp1 kezdőmp2 ...")
-        print("Példa: python3 dataset.py \"zongora_darab\" 10 45 120")
-        sys.exit(1)
+    if len(sys.argv) != 3:
+        sys.exit('Usage: python3 dataset.py "filename" start_sec\nExample: python3 dataset.py "piano_piece" 10')
 
-    input_arg = sys.argv[1]
+    file_arg = sys.argv[1]
+    extensions = ["", ".wav", ".mp3", ".m4a", ".flac", ".ogg"]
+    f_path = next((file_arg + ext for ext in extensions if os.path.exists(file_arg + ext)), None)
+    
+    if not f_path:
+        sys.exit(f"Error: File '{file_arg}' not found.")
+
     try:
-        start_times = [float(arg) for arg in sys.argv[2:]]
+        start_s = float(sys.argv[2])
     except ValueError:
-        print("\nHiba: Az időpontoknak számoknak kell lenniük.")
-        sys.exit(1)
+        sys.exit("Error: start_sec must be a number.")
 
-    work_file = find_file_with_extensions(input_arg)
-    if work_file:
-        print(f"Fájl betöltése: {work_file}")
-        y, sr = librosa.load(work_file, sr=SR)
-        for start_s in start_times:
-            save_block(y, sr, start_s, 5.0)
-        print(f"\nTakarítás: {work_file} törlése...")
-        os.remove(work_file)
-        print("Minden művelet kész.")
-    else:
-        print(f"\nHiba: A(z) '{input_arg}' fájl nem található.")
+    print(f"Loading: {f_path}")
+    y, _ = librosa.load(f_path, sr=SR)
+    start, end = int(start_s * SR), int((start_s + 5.0) * SR)
 
+    if end > len(y):
+        sys.exit(f"Warning: Requested segment ({start_s}-{start_s+5.0}s) exceeds file length, skipping.")
+
+    idx = max([int(os.path.basename(f).split('_')[1].split('.')[0]) for f in glob.glob(os.path.join(OUTPUT_DIR, "block_*.wav"))] + [0]) + 1
+    out_path = os.path.join(OUTPUT_DIR, f"block_{idx:03d}.wav")
+
+    sf.write(out_path, y[start:end], SR)
+    print(f"Saved 5s block: {out_path}")
+
+    print(f"Cleaning up: removing {f_path}...")
+    os.remove(f_path)
+    print("Done.")
 
 if __name__ == "__main__":
     main()

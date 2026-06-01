@@ -15,7 +15,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 MODEL_TYPE = "exp_final"  # Pl.: exp_clean, exp_augmented, exp_final
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models", MODEL_TYPE)
-CHECKPOINT_NAME = None  # None esetén a legfrissebb log_mel checkpointot választja.
+CHECKPOINT_NAME = "exp_final_log_mel_2dcnn_val_20260527_222650_best_model.keras"  # None esetén a legfrissebb log_mel checkpointot választja.
 
 CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 CLASS_COLORS = {

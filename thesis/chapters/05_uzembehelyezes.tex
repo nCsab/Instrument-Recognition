@@ -260,7 +260,7 @@ A \ref{fig:macro_f1_trend}.~ábra ugyanezt a folyamatot vizuálisan mutatja. Az 
 \label{fig:macro_f1_trend}
 \end{figure}
 
-Az eredmények alapján az augmentáció hatása egyértelműen pozitív. A tiszta baseline \(67{,}8\%\)-os Macro F1 értékéhez képest az augmentált kísérlet \(79{,}2\%\)-ot ért el. Ez azt jelenti, hogy a mesterségesen hozzáadott torzítások, zajok és szobaszerű visszaverődések nem csak több adatot adtak a modellnek, hanem valóban segítették a robusztusabb mintázatok megtanulását.
+Az eredmények alapján az augmentáció hatása egyértelműen pozitív. A tiszta baseline \(67{,}8\%\)-os Macro F1 értékéhez képest az augmentált kísérlet \(79{,}2\%\)-ot ért el. Ez azt jelenti, hogy a mesterségesen hozzáadott torzítások, zajok és szobaszerű visszaverődések nem csak több adatot adtak a modellnek, hanem valóban segítették az általánosabban használható mintázatok megtanulását.
 
 A naive deployment kísérlet ezzel szemben visszaesett \(67{,}2\%\)-os Macro F1 értékre. Ez a mérés számomra a dolgozat egyik legfontosabb tanulsága: ha a modellt tiszta és szoftveresen augmentált adatokon tanítjuk, majd mikrofonos környezetben próbáljuk használni, a domain shift mérhető teljesítményromlást okoz. Más szóval a valós idejű működéshez nem elég a letöltött vagy tisztított hanganyag, mert a konkrét mikrofon, hangszóró, szoba és zajprofil is beleszól abba, mit lát a modell.
 

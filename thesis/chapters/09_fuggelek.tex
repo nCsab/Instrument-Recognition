@@ -13,12 +13,13 @@ jellemzők, a betanított modellek és a futtató szkriptek hol találhatók.
 \section{A projekt könyvtárszerkezete}
 \label{sec:konyvtarszerkezet}
 
-A benyújtott digitális függelék az alábbi főbb könyvtárakat tartalmazza. A
+A benyújtott digitális függelék az alábbi főbb elemeket tartalmazza. A
 forráskód és a dokumentáció a GitHubon elérhető nyilvános Git
 adattárban\footnote{\url{https://github.com/nCsab/Instrument-Recognition}} is
-megtalálható. A nagy méretű, helyben gyűjtött vagy generált adathalmazok és
-checkpointok a digitális melléklet részei, ezért nem kerültek be a nyilvános
-adattárba. A számozott szkriptek a feldolgozási csővezeték egymásra épülő
+megtalálható. A nagy méretű, helyben gyűjtött vagy generált adathalmazok nem
+kerülnek nyilvános terjesztésre; a leadott forráscsomag a futtatáshoz szükséges
+szkripteket, a dolgozat forrását és a kiválasztott valós idejű checkpointot
+tartalmazza. A számozott szkriptek a feldolgozási csővezeték egymásra épülő
 lépéseit jelzik.
 
 \begin{table}[ht!]
@@ -32,13 +33,10 @@ lépéseit jelzik.
 \midrule
 \texttt{thesis/} & A \LaTeX\ formátumú szakdolgozat forrásfájljai, stílusfájl, irodalomjegyzék, ábrák és a generált \texttt{main.pdf}. \\
 \texttt{scripts/} & A teljes feldolgozási, jellemzőkinyerési, tanítási és valós idejű felismerési folyamat Python szkriptjei. \\
-\texttt{owndataset/} & A saját gyűjtésű forrásminták és a mikrofonos újrafelvételezéshez kapcsolódó segédanyagok. \\
-\texttt{dataset\_clean/} & A tisztított, 1~másodperces clean minták osztályonként rendezett könyvtára. \\
-\texttt{experiment\_\allowbreak datasets/} & A négy kísérleti adathalmaz WAV-alapú változata: \texttt{exp\_clean}, \texttt{exp\_augmented}, \texttt{exp\_naive\_deployment} és \texttt{exp\_final}. \\
-\texttt{processed\_data/} & A kinyert NumPy jellemzők és címkék kísérletenkénti almappákban. A clean kísérlet tartalmazza az MFCC, STFT és Log-Mel reprezentációkat, a további kísérletek főként Log-Mel bemenettel futnak; az \texttt{exp\_final} a YAMNethez szükséges nyers audio tömböket is tartalmazza. \\
-\texttt{models/} & Az időbélyeggel mentett checkpointok, classification reportok, konfúziós mátrixok és tanulási görbék kísérletenkénti almappákban. \\
-\texttt{augmented\_\allowbreak previews/} & Az augmentáció ellenőrzéséhez generált eredeti--augmentált mintapárok és spektrogramábrák. \\
-\texttt{asd/} & A 2.~fejezet akusztikai szemléltetéséhez használt kontrollált A4/A3 referenciahangok. \\
+\texttt{owndataset/dataset.py} & Manuális segédszkript hosszabb hangfájlokból 5~másodperces blokkok kivágásához. A nyers saját hangfájlok nem részei a nyilvános csomagnak. \\
+\texttt{models/exp\_final/} & A valós idejű demonstrációhoz használt kiválasztott Log-Mel + 2D CNN checkpoint. A teljes kísérleti modell- és riportmappa helyben maradt. \\
+\texttt{README.md} & Rövid futtatási leírás, pipeline-összefoglaló és adatkezelési megjegyzések. \\
+\texttt{requirements.txt} & A lokális futtatáshoz rögzített Python-csomagverziók. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -91,15 +89,23 @@ Az alábbi táblázat tartalmazza a projekt fejlesztéséhez és futtatásához 
 \midrule
 Python & 3.10+ & A teljes feldolgozási csővezeték nyelve \\
 \addlinespace
-TensorFlow / Keras & 2.x & A 2D CNN modell építése, tanítása és mentése \\
+TensorFlow & 2.19.1 & A 2D CNN modell futtatása és mentése \\
 \addlinespace
-Librosa & 0.10+ & Hangfájlok betöltése, STFT, mel-spektrogram és MFCC kinyerés \\
+Keras & 3.13.2 & Neurális hálózati rétegek és modellkezelés \\
 \addlinespace
-NumPy & 1.24+ & Jellemzőmátrixok tárolása és manipulálása \\
+Librosa & 0.11.0 & Hangfájlok betöltése, STFT, mel-spektrogram és MFCC kinyerés \\
 \addlinespace
-SoundFile / SoundDevice & -- & Hangfájlok olvasása/írása és valós idejű mikrofon-hozzáférés \\
+NumPy & 2.1.3 & Jellemzőmátrixok tárolása és manipulálása \\
 \addlinespace
-Matplotlib & 3.x & Diagramok, spektrogramok és kiértékelési ábrák készítése \\
+SoundFile & 0.13.1 & Hangfájlok olvasása és írása \\
+\addlinespace
+SoundDevice & 0.5.2 & Valós idejű mikrofon-hozzáférés \\
+\addlinespace
+scikit-learn & 1.6.1 & Classification report és konfúziós mátrix előállítása \\
+\addlinespace
+Matplotlib & 3.10.3 & Diagramok, spektrogramok és kiértékelési ábrák készítése \\
+\addlinespace
+Seaborn & 0.13.2 & Konfúziós mátrixok és F1-score ábrák formázása \\
 \addlinespace
 Google Colab & -- & GPU-gyorsított modelltanítás felhőkörnyezetben \\
 \addlinespace

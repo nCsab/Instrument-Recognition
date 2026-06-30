@@ -1,11 +1,7 @@
 # Datasets and generated data
-dataset/
-hybrid_dataset/
 dataset_clean/
-dataset_mic/
 experiment_datasets/
 augmented_previews/
-augmented_samples/
 owndataset/
 processed_data/
 
@@ -43,6 +39,7 @@ thesis/missfont.log
 thesis/*.fdb_latexmk
 thesis/*.fls
 thesis/*.lot
+thesis/*.synctex.gz
 
 # VS Code workspace settings
 .vscode/
@@ -50,10 +47,6 @@ thesis/*.lot
 
 # Trained model files
 models/
-
-# Local verification scripts
-scripts/verify_leakage.py
-scripts/03c_verify_leakage.py
 
 # Python cache
 __pycache__/

@@ -1,25 +1,24 @@
 \abstractpagehu{Kivonat}{%
-  Jelen diplomadolgozat az automatikus hangszerfelismerés problémáját vizsgálja
-  zenei felvételek alapján, modern gépi tanulási módszerek alkalmazásával.
-  A kidolgozott rendszer valós időben képes osztályozni hét hangszerkategóriát
-  (gitár, zongora, ének, vonós, nádas fúvós, rézfúvós és környezeti zaj)
-  monofón audiojel alapján.
+  Jelen diplomadolgozat az automatikus hangszerfelismerés egy szűkített,
+  hangszercsalád-szintű változatát vizsgálja zenei felvételek alapján, modern
+  gépi tanulási módszerek alkalmazásával. A kidolgozott rendszer valós időben
+  hét audioosztályt sorol be (gitár, zongora, ének, vonós, nádas fúvós,
+  rézfúvós és környezeti zaj/csend) monofón vagy domináns hangforrást tartalmazó
+  audiojel alapján.
 
   A megvalósított megoldás három spektrális jellemző típust (Log-Mel
   spektrogram, STFT és MFCC) használ, amelyek kétdimenziós konvolúciós neurális
   hálózatba (2D~CNN) kerülnek betáplálásra. A modell tanítása Google Colab
-  környezetben történt. Az adathalmazt saját tiszta internetes minták és
-  mikrofonnal/telefonnal újrafelvételezett minták, valamint az ESC-50
-  környezeti zajadatbázis egyesítésével hoztam létre. Az adataugmentációs modul
-  a valós felvételi körülményeket szimulálja visszhang, környezeti zaj és
-  mikrofonkarakterisztika hozzáadásával.
+  környezetben történt. Az adathalmaz saját internetes hangszeres mintákból,
+  ESC-50-ből származó zaj/csend mintákból, szoftveresen augmentált
+  tanítómintákból és saját mikrofonos újrafelvételekből áll. Az
+  adataugmentációs modul a valós felvételi körülményeket közelíti visszhang,
+  környezeti zaj és mikrofonkarakterisztika hozzáadásával.
 
-  A kísérleti eredmények versenyképes osztályozási pontosságot mutatnak a
-  tesztadatokon, és a rendszert valós idejű mikrofonos felismeréssel is
-  validáltam. A dolgozat hozzájárul annak demonstrálásához, hogy elérhető
-  számítási erőforrásokkal is megvalósítható egy robusztus hangszerosztályozó
-  rendszer.
+  Bár a kísérleti eredmények közel sem tökéletesek, a saját, kis mintaszámú adathalmazhoz képest bíztató pontosság mutatkozik a tesztadatokon, és a
+  rendszer valós idejű mikrofonos demonstrációként is futtatható. A dolgozat
+  azt mutatja be, hogy elérhető számítási erőforrásokkal is felépíthető egy
+  mérhető, reprodukálható, hangszercsalád-szintű audioosztályozó prototípus.
 }{%
 \textit{\textbf{Kulcsszavak:}} hangszerfelismerés, konvolúciós neurális hálózat, Mel-spektrogram, STFT, MFCC, audioosztályozás, hullámforma, spektrális kép%
 }
-

@@ -62,25 +62,25 @@
 % ── Page 1: Romanian cover page (LaTeX-generated) ────────────────────────────
 \maketitlepagero
 
-% ── Page 2: Assignment sheet (lucrare de diplomă / feladatkiírás) ─────────────
-\includepdf[pages={2}]{Nagy_Csaba.pdf}
+% ── Project sheet (fișa proiectului / feladatlap) ────────────────────────────
+\includepdf[pages=-]{Nagy_Csaba_fisa_proiectului.pdf}
 
-% ── Page 3: Declaration (declarație / nyilatkozat) ───────────────────────────
-\includepdf[pages={3}]{Nagy_Csaba.pdf}
+% ── Declaration (declarație / nyilatkozat) ───────────────────────────────────
+\includepdf[pages=-]{Nagy_Csaba_Declaratie_Student.pdf}
 
-% ── Page 4: Romanian abstract / Extras ───────────────────────────────────────
+% ── Romanian abstract / Extras ───────────────────────────────────────────────
 \pagenumbering{roman}
 \input{chapters/abstract_ro}
 
-% ── Page 5: Hungarian cover page (LaTeX-generated) ───────────────────────────
+% ── Hungarian cover page (LaTeX-generated) ───────────────────────────────────
 \pagenumbering{gobble}
 \maketitlepagehu
 
-% ── Page 6: Hungarian abstract / Kivonat ─────────────────────────────────────
+% ── Hungarian abstract / Kivonat ─────────────────────────────────────────────
 \pagenumbering{roman}
 \input{chapters/abstract_hu}
 
-% ── Page 7: English abstract / Abstract ──────────────────────────────────────
+% ── English abstract / Abstract ──────────────────────────────────────────────
 \input{chapters/abstract_en}
 
 % ── Preface / Előszó ─────────────────────────────────────────────────────────
@@ -120,13 +120,13 @@
 
 \input{chapters/03_specifikacio}
 
-\input{chapters/05_tervezes}
+\input{chapters/04_tervezes}
 
-\input{chapters/06_uzembehelyezes}
+\input{chapters/05_uzembehelyezes}
 
-\input{chapters/07_felhasznalas}
+\input{chapters/06_felhasznalas}
 
-\input{chapters/08_kovetkeztetesek}
+\input{chapters/07_kovetkeztetesek}
 
 % ════════════════════════════════════════════════════════════════════════════
 % BIBLIOGRAPHY
@@ -136,6 +136,6 @@
 % ════════════════════════════════════════════════════════════════════════════
 % APPENDICES
 % ════════════════════════════════════════════════════════════════════════════
-\input{chapters/99_fuggelek}
+\input{chapters/09_fuggelek}
 
 \end{document}

@@ -7,7 +7,7 @@ A célom egy olyan hangszerfelismerő rendszer készítése volt, amely előkés
 
 \section{Feladatpontosítás és rendszerhatárok}
 
-A dolgozat feladata hét hangosztály felismerése rövid, 1 másodperces hangminták alapján. A hat hangszeres kategória a gitár, zongora, vokál, vonós, nádfúvós és rézfúvós, ezeket egészíti ki a zaj/csend kategória. A választott felbontás szándékosan hangszercsalád-szintű: nem az a cél, hogy például a trombitát és a harsonát minden esetben különválasszam, hanem hogy a rendszer egy valós időben is kezelhető, robusztusabb kategóriarendszeren működjön.
+A dolgozat feladata hét hangosztály felismerése rövid, 1 másodperces hangminták alapján. A hat hangszeres kategória a gitár, zongora, vokál, vonós, nádfúvós és rézfúvós, ezeket egészíti ki a zaj/csend kategória. A választott felbontás szándékosan hangszercsalád-szintű: nem az a cél, hogy például a trombitát és a harsonát minden esetben különválasszam, hanem hogy a rendszer egy valós időben is kezelhető, mérhető kategóriarendszeren működjön.
 
 A rendszer határait a következőképpen határoztam meg:
 \begin{itemize}
@@ -58,14 +58,14 @@ A rendszer két fő használati mód köré szerveződik. Az első a fejlesztői
   boundary/.style={draw, rounded corners, inner sep=0.35cm},
   line/.style={thick}
 ]
-  \node[actor] (devlabel) at (-5.5, 1.8) {Fejlesztő /\\ kutató};
+  \node[actor, anchor=east] (devlabel) at (-5.85, 1.35) {Fejlesztő /\\ kutató};
   \draw[line] (-5.5,1.45) circle (0.18);
   \draw[line] (-5.5,1.27) -- (-5.5,0.55);
   \draw[line] (-5.9,1.02) -- (-5.1,1.02);
   \draw[line] (-5.5,0.55) -- (-5.9,0.05);
   \draw[line] (-5.5,0.55) -- (-5.1,0.05);
 
-  \node[actor] (userlabel) at (-5.5, -3.2) {Végfelhasználó};
+  \node[actor, anchor=east] (userlabel) at (-5.85, -3.55) {Végfelhasználó};
   \draw[line] (-5.5,-3.55) circle (0.18);
   \draw[line] (-5.5,-3.73) -- (-5.5,-4.45);
   \draw[line] (-5.9,-3.98) -- (-5.1,-3.98);
@@ -136,7 +136,6 @@ A rendszer architektúráját adatfolyamként érdemes értelmezni. A nyers hang
   \draw[arrow] (train) -- (models);
   \draw[arrow] (models) -- (realtime);
   \draw[arrow] (realtime) -- (ui);
-  \draw[arrow] (processed) |- (realtime);
 \end{tikzpicture}
 \caption{A rendszer magas szintű architektúrája és adatfolyama}
 \label{fig:architecture}
@@ -156,5 +155,43 @@ A négy kísérleti adathalmaz szerepe a következő:
   \item \textbf{\texttt{exp\_naive\_deployment}:} tiszta és augmentált train, de mikrofonos validáció és test; ez mutatja a domain shiftet.
   \item \textbf{\texttt{exp\_final}:} tiszta, augmentált és mikrofonos train, mikrofonos validáció és test; ez a végső célrendszer.
 \end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.55cm and 0.8cm,
+  protocolstep/.style={draw, rounded corners, minimum height=0.85cm, minimum width=3.1cm, align=center, font=\footnotesize, fill=blue!5},
+  train/.style={draw, rounded corners, minimum height=0.85cm, minimum width=3.1cm, align=center, font=\footnotesize, fill=green!7},
+  val/.style={draw, rounded corners, minimum height=0.85cm, minimum width=3.1cm, align=center, font=\footnotesize, fill=orange!8},
+  test/.style={draw, rounded corners, minimum height=0.85cm, minimum width=3.1cm, align=center, font=\footnotesize, fill=red!6},
+  note/.style={draw, rounded corners, minimum height=0.85cm, minimum width=3.5cm, align=center, font=\footnotesize, fill=gray!8},
+  arrow/.style={thick,->,>=stealth}
+]
+  \node[protocolstep] (source) {Tiszta 5 s\\forrásblokkok};
+  \node[protocolstep, right=of source] (split) {Split\\70\% / 15\% / 15\%};
+
+  \node[train, below left=0.9cm and 0.7cm of split] (trainset) {Train\\tanításhoz};
+  \node[val, below=0.9cm of split] (valset) {Validation\\modellválasztáshoz};
+  \node[test, below right=0.9cm and 0.7cm of split] (testset) {Test\\végső ellenőrzéshez};
+
+  \node[train, below=of trainset] (aug) {Augmentáció\\csak trainen};
+  \node[protocolstep, below=of aug] (fit) {Modell\\tanítása};
+  \node[note, below=of valset] (select) {Checkpoint\\választás};
+  \node[note, below=of testset] (finaltest) {Egyszeri\\final test};
+
+  \draw[arrow] (source) -- (split);
+  \draw[arrow] (split) -- (trainset);
+  \draw[arrow] (split) -- (valset);
+  \draw[arrow] (split) -- (testset);
+  \draw[arrow] (trainset) -- (aug);
+  \draw[arrow] (aug) -- (fit);
+  \draw[arrow] (fit) -- (select);
+  \draw[arrow] (valset) -- (select);
+  \draw[arrow] (select) -- (finaltest);
+  \draw[arrow] (testset) -- (finaltest);
+\end{tikzpicture}
+\caption{A tanítás, validáció és végső tesztelés elkülönített folyamata}
+\label{fig:train_val_test_protocol}
+\end{figure}
 
 Ezzel a felépítéssel nem csak az látható, hogy egy modell tiszta adatokon hogyan teljesít, hanem az is, hogy mi történik, amikor a bemenet átkerül a célkörnyezetbe. A részletes adathalmaz-tervezést, feature-választást és modellarchitektúrát a következő fejezet tárgyalja.

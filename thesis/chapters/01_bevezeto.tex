@@ -1,31 +1,65 @@
 \chapter{Bevezető}
 \label{chap:bevezeto}
 
-% ── 1. RÉSZ: HÁTTÉR ÉS KONTEXTUS (1-2 bekezdés) ───────────────────────────────
-% Indíts egy általános felvezetéssel a zenei információ-visszanyerésről (MIR) 
-% és a hangszerfelismerés jelentőségéről a modern digitális világban.
+Kodály Zoltán szerint a zene hangzó matematika. Számomra ez a gondolat azért
+találó, mert a zene és a számítástechnika nem egymástól távoli világok: mindkettő
+mintázatokkal, szerkezettel és értelmezéssel dolgozik. A dolgozat témája ennek a
+két területnek a metszetében helyezkedik el, a zenei információ-visszanyerés
+(Music Information Retrieval -- MIR) tágabb területén belül.
 
-Kodály Zoltán szerint a zene hangzó matematika. 
-Hasonló analógiával élve, a számítástechnika pedig a digitális matematika egy formája, ami számomra azt mutatja meg, 
-hogy valójában mindkét oldal közös tőről fakad.
+A dolgozat címe automatikus hangszerfelismerésről beszél, de fontos már az elején
+pontosítani a feladat tényleges határát. A megvalósított rendszer nem egyedi
+hangszereket azonosít tetszőleges zenei felvételben, hanem rövid, jellemzően
+monofón vagy domináns hangforrást tartalmazó mintákat sorol be hét audioosztályba:
+gitár, zongora, vokál, vonós, nádfúvós, rézfúvós és zaj/csend. Ezek közül több
+nem konkrét hangszer, hanem hangszercsalád vagy nem hangszer jellegű kategória.
+Ez a lehatárolás tudatos döntés volt, mert kis adathalmaz és valós idejű
+mikrofonos használat mellett a hangszercsalád-szintű osztályozás védhetőbb és
+mérhetőbb cél, mint sok egyedi hangszer általános felismerése.
 
-Kutatásom és ezen dolgozat elkészítése pontosan ebben a metszéspontban, 
-a zene és a számítástechnika határterületén valósul meg. 
-Ezt a közös határterületet a tudományos világban a zenei információ-visszanyerés 
-(Music Information Retrieval -- MIR) 
-interdiszciplináris területe képviseli, 
-amely a digitális jelfeldolgozás és a gépi tanulás eszköztárát ötvözi, 
-hogy képessé tegye a számítógépes rendszereket az audiojelek automatikus 
-értelmezésére. Ezen belül az automatikus hangszer- és hangszercsalád-felismerés az egyik legizgalmasabb kutatási irány, amely kulcsfontosságú a digitális zenei adatbázisok intelligens kereshetőségéhez, a valós idejű zeneelemzéshez, valamint az automatikus kottázáshoz (transzkripcióhoz).
+A zenei hangok felismerését több tényező nehezíti. Ugyanaz a hangszer másképp
+szólhat különböző játékmóddal, másik mikrofonon vagy másik szobában. A tiszta,
+stúdiószerű minták és a laptopmikrofonnal rögzített valós idejű bemenet között
+mérhető eloszlásbeli különbség, vagyis domain shift jelenik meg. Emellett a
+hasonló hangkeltési elvű osztályok, például a nádfúvós és rézfúvós hangok,
+egymáshoz közeli spektrális mintázatokat is adhatnak. Emiatt a cél nem az volt,
+hogy hibátlan, általános célú zenei elemzőrendszert készítsek, hanem hogy
+kontrollált módon végigvezessem egy saját adatokon tanított, valós időben is
+kipróbálható prototípus felépítését.
 
-Hétköznapi szinten ennek a technológiának az egyik leglátványosabb alkalmazása a modern zenei streaming szolgáltatók (mint például a Spotify vagy az Apple Music) ajánlórendszereiben érhető tetten. Ezek a platformok kifinomult algoritmusok segítségével elemzik és szabják személyre az általunk preferált zenei mintázatokat, hangszereket és dalokat, megteremtve ezzel a zenehallgatás új, intelligens korszakát. Ennek a személyre szabási folyamatnak a legalapvetőbb lépcsőfokát az olyan alacsony szintű zenei attribútumok és akusztikai jellemzők automatikus felismerése alkotja, mint amilyen a felvételeken megszólaló hangszerek azonosítása is.
+A kutatáshoz használt adathalmazt saját gyűjtésű internetes hangszeres
+mintákból, az ESC-50 adathalmazból származó zaj/csend mintákból, szoftveresen
+augmentált tanítómintákból és saját mikrofonos újrafelvételekből állítottam
+össze. Az IRMAS, NSynth, TinySOL, GoodSounds és hasonló adathalmazok a
+szakirodalmi és tervezési háttér részei, de a végleges dataset nem ezek
+közvetlen felhasználásából készült. Az internetes hangmintákat
+oktatási-kutatási demonstrációs célra használtam fel; a nyers forrásanyagok nem
+kerülnek terjesztésre.
 
-A zenében a hangszerek változatos környezetben szólalhatnak meg. Háttér szempontjából beszélhetünk ,,laboratóriumi'' stúdiófelvételekről vagy valós idejű, környezeti háttérzajjal terhelt jelekről. A stúdióminőséghez jó analógia a légüres tér, ahol ideális körülmények között csak igencsak minimális zaj található meg, míg normális esetben szinte mindig zaj kíséri a zenét -- ha más nem, legalább olyan természeti hangok, mint a szél, a madárcsicsergés vagy a lépések zaja, illetve magának a hangszernek a fizikai megszólaltatása, ami a hangfeldolgozás esetében a második legnagyobb probléma. A hangszerek megszólalhatnak egyedül, de akár többen is egyszerre: több hangszer együttes megszólalása egymásra adódik, úgymond összeolvad, aminek a szétválasztása és megkülönböztetése -- mint a hangszerfelismerés ,,első számú károkozója'' -- különösen orchesztrák esetén szinte lehetetlen.
+A dolgozat fő saját megoldása egy Log-Mel spektrogramokra épülő 2D konvolúciós
+neurális hálózat. A hangmintákból spektrális képek készülnek, a modell pedig ezek
+lokális idő-frekvencia mintázataiból tanulja meg a hét osztály elkülönítését.
+Kiegészítő összehasonlításként YAMNet transfer learning modellt is használok,
+amely előtanított audio embeddinget ad, de a valós idejű alkalmazás központi
+útvonala továbbra is a saját Log-Mel + 2D CNN pipeline.
 
-A probléma orvoslására az utóbbi időkben a deep learning modellek, különösen a 2D CNN hozott nagy könnyebbséget, amely a hang szeleteiből hoz létre egy-egy spektrális képet, mintegy a hangok ujjlenyomataként. A hangokat képpé alakítva, a vizuális mintázatok és karakterisztikák alapján történő elemzés lehetővé teszi a hangszerek sajátos színezetének felismerését, ám a szélsőségesen komplex zenekaroknál ez a módszer sem jelent teljes áttörést.
+\textbf{Célkitűzések és kutatási kérdések.} A dolgozatban a következő kérdésekre
+keresek választ:
+\begin{enumerate}
+    \item Milyen pontosság érhető el egy saját, kis méretű adathalmazon tanított
+    Log-Mel + 2D CNN modellel hét audioosztály esetén?
+    \item Javítja-e a validációs teljesítményt a szoftveres adataugmentáció?
+    \item Kimutatható-e a tiszta adatok és a mikrofonos célkörnyezet közötti
+    domain shift?
+    \item Javít-e a mikrofonos tanítóadatok bevonása a célkörnyezeti
+    teljesítményen?
+    \item Hogyan viszonyul a saját modellhez egy YAMNet alapú transfer learning
+    referencia?
+\end{enumerate}
 
-A kutatáshoz használt adathalmazt saját magam állítottam össze az interneten fellelhető zenefelvételek egészen apró szeleteiből, miután alaposan áttekintettem a korábban létező adatbázisokat. Azok a meglévő minták ugyanis nem követték pontosan az én tervezési szándékaimat, és nem adtak választ azokra a specifikus problémákra, amelyeket vizsgálni szerettem volna. Hosszú távon sokkal célravezetőbb egy teljesen saját, organikus adatbázis felépítése, amely tökéletesen illeszkedik a rendszer egyedi igényeihez.
-
-Az elkészült neurális hálózatra és a saját adathalmazra építve a kutatás végcélja egy olyan alkalmazás kifejlesztése, amely közvetlen, gyakorlati segítséget nyújthat a felhasználóknak. Egy ilyen rendszer továbbfejlesztett változata különösen hasznos lehet azok számára, akik ritkán fordultak meg valós, élő zenei környezetben, és fejletlen a hangszerfelismerési képességük, de gyakran találják magukat olyan helyzetben, amikor egy számukra tetsző, videóklip nélküli dallamban megszólaló hangszer nevét szeretnék azonosítani.
-
-A dolgozat további fejezetei lépésről lépésre követik a szoftverfejlesztés lépéseit. A zenei és gépi tanulási elmélet megalapozása után részletesen bemutatásra kerül a rendszer specifikációja és architektúrája, amelyet a 2D CNN hálózat és a valós idejű alkalmazás implementációja, valamint a gyakorlati tesztelés és kiértékelés követ.
+A dolgozat további fejezetei ezt a gondolatmenetet követik. Az elméleti rész
+megadja az audio-jelfeldolgozási és gépi tanulási alapokat, ezt követi a rendszer
+specifikációja, majd a részletes tervezés. Az üzembe helyezési és eredményfejezet
+mutatja be a négy kísérleti fázist, a végső tesztet és a YAMNet összehasonlítást,
+végül a használati fejezet és a következtetések a prototípus gyakorlati oldalát,
+korlátait és továbbfejlesztési lehetőségeit foglalják össze.

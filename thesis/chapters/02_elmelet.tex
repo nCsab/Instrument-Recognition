@@ -1,20 +1,19 @@
 \chapter{Elméleti megalapozás és szakirodalmi tanulmány}
 \label{chap:elmelet}
 
-Ebben a fejezetben azokat az elméleti és szakirodalmi alapokat foglalom össze, amelyek közvetlenül szükségesek a dolgozatban megvalósított hangszerfelismerő rendszer megértéséhez. Nem célom teljes audio-jelfeldolgozási vagy mélytanulási tankönyvet írni; inkább azt mutatom meg, hogy a hang fizikai tulajdonságaiból hogyan jutok el a tanítható spektrogram-reprezentációkig, majd ezekből hogyan lesz osztályozó modell.
+Ebben a fejezetben azokat az elméleti és szakirodalmi alapokat foglalom össze, amelyek közvetlenül szükségesek a dolgozatban megvalósított hangszerfelismerő rendszer megértéséhez. Csak a projekt szempontjából lényeges témák kerülnek előtérbe: nem célom a teljes audio-jelfeldolgozás vagy mélytanulás részletes tárgyalása. Inkább azt mutatom meg, hogy a hang fizikai tulajdonságaiból hogyan jutok el a tanítható spektrogram-reprezentációkig, majd ezekből hogyan lesz osztályozó modell.
 
 \section{Szakirodalmi és technológiai háttér}
 \label{sec:szakirodalom}
-\label{sec:hasonlo_alkalmazasok}
 \label{sec:technologiak}
 
 Az automatikus hangszerfelismerés több, egymáshoz kapcsolódó területre épül: környezeti hangosztályozásra, zenei információ-visszakeresésre, izolált hangszerhangok elemzésére és neurális audio-reprezentációkra. A saját munkám szempontjából nem az volt a cél, hogy egy meglévő rendszert lemásoljak, hanem az, hogy ezekből a megközelítésekből kiválasszam azt az irányt, amely egy kis méretű, saját gyűjtésű, valós időben is használható rendszerhez illeszkedik.
 
-A környezeti hangosztályozás egyik ismert kiindulópontja az ESC adathalmaz \cite{piczak2015esc}, amely rövid hangrészleteken vizsgálja a kategóriafelismerést. Ez a dolgozatban főleg a \textit{noise} osztály miatt fontos: a rendszernek nemcsak hangszercsaládokat kell felismernie, hanem azt is, amikor nincs értelmezhető hangszeres bemenet. Közvetlenebb zenei előzmény az IRMAS adathalmaz \cite{bosch2012irmas}, amely már kifejezetten hangszerek felismerésére készült, zenei környezetben. Az én rendszerem ennél szűkebb feladatot vállal: rövid, egy másodperces mintákból hangszercsaládot becsül, mikrofonos használati helyzetre készülve.
+A környezeti hangosztályozás egyik ismert kiindulópontja az ESC adathalmaz \cite{piczak2015esc}, amely rövid hangrészleteken vizsgálja a kategóriafelismerést. Ez a dolgozatban főleg a \textit{noise} osztály miatt fontos: a rendszernek nemcsak hangszercsaládokat kell felismernie, hanem azt is, amikor nincs értelmezhető hangszeres bemenet. A CNN-alapú környezeti hangosztályozásnál Salamon és Bello munkája különösen releváns, mert az adataugmentációt nem kiegészítő trükként, hanem a kis tanítóhalmazok általánosítását segítő eszközként vizsgálja \cite{salamon2017deep}. Közvetlenebb zenei előzmény az IRMAS adathalmaz \cite{bosch2012irmas}, amely már kifejezetten hangszerek felismerésére készült, zenei környezetben. Az én rendszerem ennél szűkebb feladatot vállal: rövid, egy másodperces mintákból hangszercsaládot becsül, mikrofonos használati helyzetre készülve.
 
 Az izolált hangszerhangokat tartalmazó adathalmazok közül az NSynth \cite{engel2017nsynth}, a TinySOL \cite{cella2020tinysol}, a Medley-solos-DB \cite{lostanlen2018medley} és a GoodSounds \cite{romani2015good} adtak fontos támpontot. Ezek közös tanulsága, hogy a hangszín nem egyetlen egyszerűen mérhető érték, hanem az időbeli burkológörbe, a felharmonikus szerkezet, a megszólaltatási mód és a felvételi környezet együttese. Emiatt a saját rendszeremben nem sok különálló hangszert, hanem hét akusztikailag indokolható osztályt különítek el: gitár, zongora, vokál, vonós, nádfúvós, rézfúvós és zaj/csend.
 
-A megvalósítás gyakorlati alapját Python környezetben a Librosa \cite{mcfee2015librosa}, a NumPy, a Matplotlib és a TensorFlow/Keras \cite{tensorflow2015-whitepaper} adta. A Librosa egységes módon támogatja a hullámformák betöltését, az STFT, MFCC és log-Mel reprezentációk előállítását, míg a TensorFlow/Keras a neurális modellek tanításához és kiértékeléséhez szolgált alapul. Az audio-jelfeldolgozási magyarázatoknál Valerio Velardo \textit{The Sound of AI} oktatási anyagát is felhasználtam \cite{velardo2020audio}. A YAMNet-alapú megközelítés nem a saját pipeline helyettesítője, hanem későbbi transzfer tanulási összehasonlítási pont.
+A megvalósítás gyakorlati alapját Python környezetben a Librosa \cite{mcfee2015librosa}, a NumPy, a Matplotlib és a TensorFlow/Keras \cite{tensorflow2015-whitepaper} adta. A Librosa egységes módon támogatja a hullámformák betöltését, az STFT, MFCC és log-Mel reprezentációk előállítását, míg a TensorFlow/Keras a neurális modellek tanításához és kiértékeléséhez szolgált alapul. Az audio-jelfeldolgozási magyarázatoknál Valerio Velardo \textit{The Sound of AI} oktatási anyagát is felhasználtam \cite{velardo2020audio}. A YAMNet-alapú megközelítés az AudioSet nagyskálájú audioesemény-adatbázisához és az azon vizsgált CNN-alapú audioosztályozási irányhoz kapcsolódik \cite{gemmeke2017audioset,hershey2017cnn}; a dolgozatban nem a saját pipeline helyettesítője, hanem transzfer tanulási összehasonlítási pont.
 
 \section{Digitális hang és hangreprezentáció}
 \label{sec:elmeleti_alapok}
@@ -61,7 +60,7 @@ A nyers hullámforma közvetlenül is tartalmaz minden információt, de egy kis
     \label{fig:spectrogram_example}
 \end{figure}
 
-A lineáris frekvenciaskála mellett gyakran használunk perceptuális skálákat is. Az emberi hallás az alacsony frekvenciák közötti különbségekre érzékenyebb, míg magas frekvenciákon kevésbé finom a megkülönböztetés. Ezt követi a Mel-skála: a mély tartományt részletesebben, a magas tartományt tömörebben ábrázolja. Ha az STFT után Mel-szűrőbankot és logaritmikus decibel skálázást alkalmazunk, log-Mel spektrogramot kapunk.
+A lineáris frekvenciaskála mellett gyakran használunk perceptuális skálákat is. Az emberi hallás az alacsony frekvenciák közötti különbségekre érzékenyebb, míg magas frekvenciákon kevésbé finom a megkülönböztetés. Ezt követi a Mel-skála: a mély tartományt részletesebben, a magas tartományt tömörebben ábrázolja. Ha az STFT után Mel-szűrőbankot és logaritmikus decibel skálázást alkalmazunk, log-Mel spektrogramot kapunk. A log-Mel bemenet zenei audiofeladatokban is gyakori, mert a CNN a spektrális és időbeli mintázatokat képszerű reprezentáción tanulhatja meg \cite{pons2018end}.
 
 \begin{figure}[H]
     \centering
@@ -92,7 +91,7 @@ Log-Mel & Perceptuális spektrogram & CNN-hez jól illeszkedő, képszerű és h
 
 A hangszerfelismerés felügyelt osztályozási feladat: minden tanítómintához tartozik egy bemenet és egy címke. A modell feladata, hogy a bemenet alapján hét kategória közül válasszon. Többosztályos neurális hálózatnál a kimeneti réteg tipikusan softmax aktivációt használ, amely minden osztályhoz egy valószínűségszerű értéket rendel. A prediktált osztály az lesz, amelynek a kimeneti értéke a legnagyobb.
 
-A tanítás során a hálózat a hibás predikciók alapján módosítja a súlyait. A validációs halmaz szerepe az, hogy mérje: a modell nemcsak a tanítóadatokat jegyezte-e meg, hanem új mintákon is képes-e általánosítani. A túlilleszkedés (overfitting) akkor jelenik meg, amikor a modell a tanítóhalmazon jól teljesít, de a validációs vagy teszthalmazon gyengébben. Ennek mérséklésére használhatók például dropout rétegek, adataugmentáció, címkesimítás, valamint korai leállítás.
+A tanítás során a hálózat a hibás predikciók alapján módosítja a súlyait. A validációs halmaz szerepe az, hogy mérje: a modell nemcsak a tanítóadatokat jegyezte-e meg, hanem új mintákon is képes-e általánosítani. A túlilleszkedés (overfitting) akkor jelenik meg, amikor a modell a tanítóhalmazon jól teljesít, de a validációs vagy teszthalmazon gyengébben. Ennek mérséklésére használhatók például dropout rétegek, adataugmentáció, címkesimítás, valamint korai leállítás. Spektrogram-bemeneteknél az idő- és frekvenciamaszkok használata a SpecAugment módszerrel vált ismertté \cite{park2019specaugment}; a saját rendszerben ennek egyszerűsített gondolata jelenik meg tanítás közbeni maszkolásként.
 
 Spektrogramok esetében a 2D konvolúciós neurális hálózat természetes választás, mert a bemenet képszerű: az egyik tengely az időt, a másik a frekvenciát jelöli. A konvolúciós szűrők lokális idő-frekvencia mintázatokat tanulnak, például hirtelen tranzienseket, kitartott harmonikus sávokat vagy zajos spektrális tartományokat.
 
@@ -138,7 +137,7 @@ Zaj/Csend & Környezeti zajok & Véletlenszerű rezgések & Aperiodikus, rendsze
 \endgroup
 \end{table}
 
-A táblázatban hosszabb hullámforma-részletek szerepelnek, mert ezeken jól látszik a hang felfutása és lecsengése. Emellett kontrollált, közeli példákat is készítettem az \texttt{asd/} mappában található hangmintákból. A legtöbb hangszer esetében A4 hangot használtam, a nagybőgő és a tuba esetében A3-at, mert ezeknél ez természetesebb regiszter. Ezek az ábrák nem tanítóadatok, hanem szemléltető példák: a periódus belső alakjára és a családon belüli hasonlóságokra nagyítanak rá.
+A táblázatban hosszabb hullámforma-részletek szerepelnek, mert ezeken jól látszik a hang felfutása és lecsengése. Emellett kontrollált, közeli referenciahangokból külön nagyított példákat is készítettem. A legtöbb hangszer esetében A4 hangot használtam, a nagybőgő és a tuba esetében A3-at, mert ezeknél ez természetesebb regiszter. Ezek az ábrák nem tanítóadatok, hanem szemléltető példák: a periódus belső alakjára és a családon belüli hasonlóságokra nagyítanak rá.
 
 \begin{figure}[H]
 \centering

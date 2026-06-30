@@ -4,6 +4,9 @@ import glob
 import librosa
 import soundfile as sf
 
+# Manuális előkészítő segédscript: egy hosszabb hangfájlból kivág egy 5 másodperces blokkot.
+# A fő pipeline a scripts/ mappában van, ez inkább a saját nyers minták gyors rendezésére szolgál.
+
 SR = 16000
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "instruments", "guitar")
@@ -27,6 +30,7 @@ def main():
 
     print(f"Loading: {f_path}")
     y, _ = librosa.load(f_path, sr=SR)
+    # A megadott kezdőponttól pontosan 5 másodpercet vágunk ki egységes, 16 kHz-es formában.
     start, end = int(start_s * SR), int((start_s + 5.0) * SR)
 
     if end > len(y):
@@ -38,6 +42,7 @@ def main():
     sf.write(out_path, y[start:end], SR)
     print(f"Saved 5s block: {out_path}")
 
+    # A feldolgozott forrásfájlt törli, hogy ne keveredjen újra a következő előkészítésnél.
     print(f"Cleaning up: removing {f_path}...")
     os.remove(f_path)
     print("Done.")

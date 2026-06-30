@@ -3,6 +3,10 @@ import hashlib
 import os
 import shutil
 
+# A kísérleti adathalmazok összeállítása.
+# A script a clean és mikrofonos mintákból négy mappát készít, amelyek a
+# dolgozatban tárgyalt kísérleti fázisokat képviselik.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
@@ -15,15 +19,19 @@ INSTRUMENTS = ["guitar", "piano", "vocal", "string", "reed", "brass"]
 CLASSES = INSTRUMENTS + ["noise"]
 
 EXPERIMENTS = {
+    # 1. Tiszta baseline: minden split clean domainből származik.
     "exp_clean": {
         "train": ["clean_train"], "val": ["clean_val"], "test": ["clean_test"],
     },
+    # 2. Augmentációs kísérlet: a train később bővül, val/test clean marad.
     "exp_augmented": {
         "train": ["clean_train"], "val": ["clean_val"], "test": ["clean_test"],
     },
+    # 3. Naiv deployment: clean trainen tanul, mikrofonos val/testen mérjük.
     "exp_naive_deployment": {
         "train": ["clean_train"], "val": ["mic_val"], "test": ["mic_test"],
     },
+    # 4. Végső rendszer: clean + mic train, mikrofonos val/test.
     "exp_final": {
         "train": ["clean_train", "mic_train"], "val": ["mic_val"], "test": ["mic_test"],
     },
@@ -88,6 +96,8 @@ def copy_class_split(exp_dir, cls, split, sources):
 
 
 def copy_balanced_noise(exp_dir, split, used_hashes):
+    # A noise osztályt az instrumentumok átlagos darabszámához igazítja.
+    # Hash alapján kerüli, hogy azonos noise minta több splitbe jusson.
     dest = os.path.join(exp_dir, "noise", split)
     os.makedirs(dest, exist_ok=True)
 

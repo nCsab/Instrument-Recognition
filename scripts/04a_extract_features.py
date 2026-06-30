@@ -10,6 +10,10 @@ import soundfile as sf
 from utils.augmentation_utils import apply_macbook_augment
 from utils.feature_utils import extract_log_mel, extract_mfcc, extract_stft, normalize_db_feature, z_score_normalize
 
+# Feature extraction és NumPy tömbök mentése.
+# A clean kísérletben MFCC/STFT/Log-Mel összehasonlítás készül, a további
+# kísérletekben már csak a kiválasztott Log-Mel reprezentáció szerepel.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 EXPERIMENTS_DIR = os.path.join(PROJECT_ROOT, "experiment_datasets")
@@ -24,9 +28,12 @@ FEATURES = {
     "mfcc": lambda y: z_score_normalize(extract_mfcc(y)),
 }
 EXPERIMENTS = [
+    # Clean baseline: itt történik a feature extractorok összehasonlítása.
     ("exp_clean", ["log_mel", "stft", "mfcc"], False, None, False, "1. CLEAN BASELINE"),
+    # A további kísérletekben Log-Mel marad, augmentáció csak trainen.
     ("exp_augmented", ["log_mel"], False, "exp_augmented", True, "2. AUGMENTED BASELINE"),
     ("exp_naive_deployment", ["log_mel"], False, "exp_naive_deployment", True, "3. NAIVE DEPLOYMENT"),
+    # Raw audio csak az exp_final esetén kell a YAMNet referenciához.
     ("exp_final", ["log_mel"], True, "exp_final", True, "4. FINAL SYSTEM"),
 ]
 SR = 16000
@@ -43,6 +50,7 @@ def wavs(path):
 
 
 def one_second(audio):
+    # Egységes 1 mp-es hossz: rövidebb jel nullákkal kiegészül, hosszabb vágódik.
     return np.pad(audio, (0, max(0, SR - len(audio))))[:SR]
 
 
@@ -73,6 +81,7 @@ def save_arrays(data, output_dir, feature_names, extract_raw):
             if name != "raw":
                 array = array.reshape(array.shape[0], array.shape[1], array.shape[2], 1)
                 if name != "mfcc":
+                    # Log-Mel és STFT fix dB-tartományból [0, 1] skálára kerül.
                     array = normalize_db_feature(array)
 
             path = os.path.join(output_dir, f"X_{name}_{split}.npy")
@@ -138,6 +147,8 @@ def process_dataset(dataset_dir, output_dir, feature_names, preview_dir=None, do
 
                     can_augment = do_augmentation and split == "train" and cls != "noise" and "_mic_" not in os.path.basename(file_path)
                     if can_augment:
+                        # Augmentáció csak clean train mintákon: így nem szivárog át
+                        # torzított pár validation/test halmazba.
                         aug = apply_macbook_augment(audio.copy(), noise_files, noise_path=noise_dir, sr=SR)
                         aug = one_second(aug)
                         add_sample(data, split, label, aug, feature_names, extract_raw)

@@ -3,8 +3,13 @@ import random
 import numpy as np
 import librosa
 
+# Adataugmentációs segédfüggvények.
+# A cél nem új osztályok létrehozása, hanem a clean train minták torzítása
+# olyan irányokba, amelyek közelebb állnak a valós mikrofonos környezethez.
+
 
 def add_noise(audio, noise_path, sr=16000, duration=1.0, snr_db=10):
+    # Háttérzaj hozzáadása megadott jel-zaj viszony mellett.
     try:
         noise, _ = librosa.load(noise_path, sr=sr, duration=duration)
         if len(noise) < len(audio):
@@ -22,6 +27,7 @@ def add_noise(audio, noise_path, sr=16000, duration=1.0, snr_db=10):
 
 
 def add_reverb(audio, sr=16000, delay_ms=30, decay=0.4):
+    # Egyszerű visszhang-szimuláció késleltetett jelösszetevőkkel.
     try:
         delay_samples = int(sr * (delay_ms / 1000.0))
         taps = [delay_samples, int(delay_samples * 1.5), int(delay_samples * 2.1)]
@@ -35,6 +41,7 @@ def add_reverb(audio, sr=16000, delay_ms=30, decay=0.4):
 
 
 def add_eq(audio):
+    # Frekvenciamenet enyhe módosítása pre-emphasis szűrővel.
     try:
         coef = random.uniform(-0.5, 0.5)
         return librosa.effects.preemphasis(audio, coef=coef)
@@ -43,6 +50,8 @@ def add_eq(audio):
 
 
 def add_pitch_shift(audio, sr=16000, n_steps=None):
+    # Hangmagasság kis mértékű eltolása; a végső pipeline-ban nem ez a fő
+    # MacBook-szerű augmentációs elem, de segédfüggvényként megmaradt.
     if n_steps is None:
         n_steps = random.uniform(-1.5, 1.5)
     try:
@@ -62,6 +71,8 @@ def _room_reverb(audio, sr=16000, delay_ms=30, decay=0.3):
 
 
 def apply_macbook_augment(audio, noise_files, noise_path="", sr=16000):
+    # A végső augmentációs lánc: szobai visszhang, frekvenciamenet-változás,
+    # háttérzaj, soft clipping és amplitúdó-normalizálás.
     aug = audio.copy()
 
     if random.random() < 0.8:

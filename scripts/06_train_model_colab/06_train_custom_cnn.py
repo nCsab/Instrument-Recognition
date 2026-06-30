@@ -10,6 +10,9 @@ import seaborn as sns
 from google.colab import drive
 import random
 
+# Saját 2D CNN tanító- és kiértékelő script Google Colabhoz.
+# A test splitet csak a végső, kiválasztott checkpoint ellenőrzésére kell használni.
+
 # --- Kísérleti Kontroll Beállítások ---
 random.seed(42)
 np.random.seed(42)
@@ -30,6 +33,7 @@ CLASSES = ["guitar", "piano", "vocal", "string", "reed", "brass", "noise"]
 
 
 class SpecAugment(layers.Layer):
+    # Tanítás közbeni maszkolás: a modell ne csak egy-egy frekvencia- vagy idősávra támaszkodjon.
     def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, apply_freq_mask=True, **kwargs):
         super().__init__(**kwargs)
         self.freq_mask_param = freq_mask_param
@@ -76,6 +80,7 @@ class SpecAugment(layers.Layer):
 
 
 def build_model(input_shape, num_classes, feature_type):
+    # Könnyű 2D CNN: három konvolúciós blokk, majd globális átlagolás és softmax kimenet.
     # Log-Mel és STFT esetében alkalmazzuk a frekvencia-maszkolást, MFCC-nél kikapcsoljuk
     apply_freq_mask = False if feature_type == 'mfcc' else True
     
@@ -117,6 +122,7 @@ def build_model(input_shape, num_classes, feature_type):
 
 
 def load_subset(subset, feature_type):
+    # A lokálisan előkészített .npy feature- és címkefájlokat tölti be.
     X = np.load(os.path.join(DATA_PATH, f'X_{feature_type}_{subset}.npy'))
     if X.ndim == 3: X = X[..., np.newaxis]
     y = np.load(os.path.join(DATA_PATH, f'y_labels_{subset}.npy'))
@@ -124,6 +130,7 @@ def load_subset(subset, feature_type):
 
 
 def plot_results(y_true, y_pred, history, feature_type, eval_split, save_path, artifact_prefix):
+    # A riportokhoz szükséges ábrák: konfúziós mátrix, osztályonkénti F1 és tanulási görbék.
     report_dict = classification_report(y_true, y_pred, target_names=CLASSES, output_dict=True)
     cm = confusion_matrix(y_true, y_pred)
 
@@ -169,6 +176,7 @@ def plot_results(y_true, y_pred, history, feature_type, eval_split, save_path, a
 
 
 def save_evaluation_report(y_true, y_pred, report_text, report_dict, eval_split, save_path, artifact_prefix, checkpoint_path):
+    # Minden futás időbélyeges néven menti a szöveges, JSON és CSV riportokat.
     cm = confusion_matrix(y_true, y_pred)
     cm_path = os.path.join(save_path, f'{artifact_prefix}_confusion_matrix.csv')
     txt_path = os.path.join(save_path, f'{artifact_prefix}_classification_report.txt')
@@ -258,6 +266,7 @@ def main():
         model = build_model((X_train.shape[1], X_train.shape[2], X_train.shape[3]), num_classes, FEATURE_TYPE)
         model.summary()
 
+        # A legjobb modellt val_loss alapján mentjük; ha nincs javulás, a tanítás megáll.
         callbacks_list = [
             callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
             callbacks.ModelCheckpoint(

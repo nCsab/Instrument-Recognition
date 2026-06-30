@@ -10,6 +10,10 @@ import tensorflow as tf
 
 from utils.feature_utils import extract_log_mel, normalize_db_feature
 
+# Valós idejű mikrofonos felismerés a saját Log-Mel + 2D CNN modellel.
+# A script 1 másodperces csúszó ablakból készít Log-Mel bemenetet, majd
+# simított predikciót ír ki a terminálba.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
@@ -41,6 +45,8 @@ audio_q = queue.Queue()
 
 
 class SpecAugment(tf.keras.layers.Layer):
+    # A tanított modell betöltéséhez szükséges kompatibilitási réteg.
+    # Inferencia közben nem módosítja a bemenetet.
     def __init__(self, freq_mask_param=15, time_mask_param=8, num_masks=2, apply_freq_mask=True, **kwargs):
         super().__init__(**kwargs)
         self.freq_mask_param = freq_mask_param
@@ -69,6 +75,8 @@ def audio_callback(indata, frames, time, status):
 
 
 def prepare_input(audio):
+    # A mikrofonos ablakból ugyanaz a Log-Mel normalizált bemenet készül,
+    # mint amit a tanítás során is használt a modell.
     feature = extract_log_mel(audio, sr=SR)
     target_frames = INPUT_SHAPE[1]
     if feature.shape[1] < target_frames:
@@ -79,6 +87,7 @@ def prepare_input(audio):
 
 
 def choose_class(probs, current_class):
+    # Hiszterézis és küszöbök: csökkentik a gyors, bizonytalan osztályváltást.
     adjusted = probs.copy()
     adjusted[CLASSES.index(current_class)] += HYSTERESIS_BONUS
     candidate = CLASSES[int(np.argmax(adjusted))]
@@ -105,12 +114,12 @@ def display_prediction(probs, current_class):
 
 
 def load_model():
+    # Fix checkpoint esetén azt tölti be; egyébként a legfrissebb Log-Mel
+    # checkpointot keresi az adott modellmappában.
     if CHECKPOINT_NAME:
         model_path = CHECKPOINT_NAME if os.path.isabs(CHECKPOINT_NAME) else os.path.join(MODEL_DIR, CHECKPOINT_NAME)
     else:
         checkpoints = sorted(glob.glob(os.path.join(MODEL_DIR, "*log_mel_2dcnn_*_best_model.keras")))
-        if not checkpoints:
-            checkpoints = sorted(glob.glob(os.path.join(MODEL_DIR, "best_log_mel_2dcnn_model.keras")))
         model_path = checkpoints[-1] if checkpoints else None
 
     if not model_path or not os.path.exists(model_path):

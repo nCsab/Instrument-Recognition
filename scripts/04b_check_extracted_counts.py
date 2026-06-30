@@ -2,6 +2,9 @@ import os
 
 import numpy as np
 
+# Ellenőrzi a feldolgozott NumPy tömböket.
+# Kiírja a címkék osztályonkénti eloszlását és a Log-Mel feature alakját.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, "processed_data")

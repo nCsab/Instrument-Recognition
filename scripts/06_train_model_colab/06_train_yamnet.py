@@ -11,6 +11,9 @@ import seaborn as sns
 from google.colab import drive
 import random
 
+# YAMNet transfer learning referencia Google Colabhoz.
+# A YAMNet előtanított része feature extractorként működik, erre tanul egy kis saját osztályozófej.
+
 random.seed(42)
 np.random.seed(42)
 tf.random.set_seed(42)
@@ -36,6 +39,7 @@ print("YAMNet loaded.")
 
 
 def extract_yamnet_embeddings(raw_audio_array):
+    # Nyers 1 másodperces hangokból 1024 dimenziós YAMNet embeddingeket készít.
     embeddings_list = []
     total = len(raw_audio_array)
     for i, waveform in enumerate(raw_audio_array):
@@ -48,6 +52,7 @@ def extract_yamnet_embeddings(raw_audio_array):
 
 
 def build_classifier(embedding_dim=1024, num_classes=7):
+    # Kis Dense osztályozófej a YAMNet embeddingek tetején a hét saját audioosztályhoz.
     model = models.Sequential([
         layers.Input(shape=(embedding_dim,)),
         layers.Dense(256, activation='relu'),
@@ -65,6 +70,7 @@ def build_classifier(embedding_dim=1024, num_classes=7):
 
 
 def plot_results(y_true, y_pred, history, model_name, eval_split, save_path, artifact_prefix):
+    # Ugyanazokat a riportábrákat menti, mint a saját CNN tanítószkript.
     report_dict = classification_report(y_true, y_pred, target_names=CLASSES, output_dict=True)
     cm = confusion_matrix(y_true, y_pred)
 
@@ -107,6 +113,7 @@ def plot_results(y_true, y_pred, history, model_name, eval_split, save_path, art
 
 
 def save_evaluation_report(y_true, y_pred, report_text, report_dict, eval_split, save_path, artifact_prefix, checkpoint_path):
+    # Időbélyeges riportmentés, hogy több futtatás ne írja felül egymást.
     cm = confusion_matrix(y_true, y_pred)
     cm_path = os.path.join(save_path, f'{artifact_prefix}_confusion_matrix.csv')
     txt_path = os.path.join(save_path, f'{artifact_prefix}_classification_report.txt')
@@ -149,6 +156,7 @@ def resolve_checkpoint_path(checkpoint_name):
 
 
 def load_or_extract_embeddings(split):
+    # Az embedding kinyerése lassabb művelet, ezért split szerint cache-eljük .npy fájlba.
     emb_path = os.path.join(DATA_PATH, f'X_yamnet_emb_{split}.npy')
     if os.path.exists(emb_path):
         print(f"Loading cached YAMNet embeddings ({split})...")
@@ -213,6 +221,7 @@ if TRAIN_MODEL:
     model = build_classifier(embedding_dim=1024, num_classes=num_classes)
     model.summary()
 
+    # A validációs loss dönti el a legjobb checkpointot; a test itt sem vesz részt modellválasztásban.
     callbacks_list = [
         callbacks.EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True),
         callbacks.ModelCheckpoint(

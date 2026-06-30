@@ -6,6 +6,12 @@ import shutil
 import librosa
 import soundfile as sf
 
+# A clean adathalmaz előállítása.
+# A script először 5 másodperces blokkokat oszt train/val/test halmazba,
+# majd csak ezután vágja őket 1 másodperces klipekre. Ez csökkenti annak
+# esélyét, hogy ugyanannak a blokknak nagyon hasonló szeletei külön splitbe
+# kerüljenek.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 OWNDATASET_DIR = os.path.join(PROJECT_ROOT, "owndataset")
@@ -26,6 +32,8 @@ def wav_files(path):
 
 
 def source_prefix(cls, filename):
+    # Forráscsoport azonosítása: a split nem egyes 1 mp-es szeleteken,
+    # hanem összetartozó blokkokon történik.
     if cls != "noise":
         parts = filename.split("_block")
         return parts[0] if len(parts) > 1 else cls
@@ -48,6 +56,7 @@ def split_blocks(groups):
     train, val, test = [], [], []
     random.seed(42)
     for prefix, blocks in groups.items():
+        # Reprodukálható, forráscsoporton belüli 70/15/15 felosztás.
         random.shuffle(blocks)
         n_train = int(len(blocks) * TRAIN_RATIO)
         n_val = int(len(blocks) * VAL_RATIO)
@@ -59,6 +68,7 @@ def split_blocks(groups):
 
 
 def write_clips(block_path, output_dir, prefix, group_id):
+    # Egy 5 mp-es blokk legfeljebb öt darab 1 mp-es mintára bomlik.
     audio, _ = librosa.load(block_path, sr=SR)
     clip_len = int(CLIP_DURATION * SR)
     max_clips = int(BLOCK_DURATION / CLIP_DURATION)
@@ -112,6 +122,8 @@ def files_by_group(*dirs):
 
 
 def rebalance_val_test(cls):
+    # A val/test arányt csoportszinten igazítja, hogy ne bontson szét
+    # összetartozó klipeket.
     val_dir = os.path.join(OUTPUT_DIR, cls, "val")
     test_dir = os.path.join(OUTPUT_DIR, cls, "test")
     if not os.path.exists(val_dir) or not os.path.exists(test_dir):

@@ -8,6 +8,10 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+# Mikrofonos adatok felvétele és szeletelése.
+# A clean mintákból hosszabb visszajátszási fájlok készülnek, ezeket telefonról
+# vagy hangszóróról lehet lejátszani, majd laptopmikrofonnal visszarögzíteni.
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 BASE_DIR = os.path.join(PROJECT_ROOT, "dataset_clean")
@@ -47,6 +51,8 @@ def clean_files(category, split):
 
 
 def prepare_files():
+    # Minden visszajátszási fájl elejére 440 Hz-es beep kerül. Ez segít
+    # automatikusan megtalálni a felvétel tényleges kezdetét szeleteléskor.
     print("\nPreparing playback files...")
     for split in SPLITS:
         playback_dir = record_path(split, "playback")
@@ -70,6 +76,8 @@ def prepare_files():
 
 
 def record_one(split, category):
+    # Interaktív felvétel: a felhasználó elindítja a lejátszást, majd a script
+    # a várható hossz alapján rögzíti a mikrofonos hangot.
     playback_file = record_path(split, "playback", f"{category}_for_mic.wav")
     recorded_dir = record_path(split, "recorded")
     os.makedirs(recorded_dir, exist_ok=True)
@@ -107,6 +115,7 @@ def record_mic():
 
 
 def find_beep_end(audio, freq=440.0):
+    # A beep végét az STFT-ben a 440 Hz körüli energiasáv alapján keresi meg.
     spectrum = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512))
     freqs = librosa.fft_frequencies(sr=SR, n_fft=2048)
     energy = spectrum[np.argmin(np.abs(freqs - freq))]
@@ -124,6 +133,8 @@ def find_beep_end(audio, freq=440.0):
 
 
 def slice_audio(split, category):
+    # A beep és az utána lévő 1 mp csend után 1 mp-es mintákra vágja a
+    # mikrofonos felvételt. A 0,2 mp szünet segít elkülöníteni a klipeket.
     source = record_path(split, "recorded", f"{category}_recorded.wav")
     if not os.path.exists(source):
         print(f"Not found: {source}")
